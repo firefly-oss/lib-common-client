@@ -8,7 +8,7 @@
 
 A comprehensive, reactive service communication framework for microservice architectures developed by **Firefly Software Solutions Inc**. Provides unified REST and gRPC client interfaces with built-in resilience patterns, circuit breakers, and comprehensive observability.
 
-> **Developed by [Firefly Software Solutions Inc](https://firefly-software.com)** - Building enterprise-grade solutions for modern microservice architectures.
+> **Developed by [Firefly Software Solutions Inc](https://getfirefly.io)** - Building enterprise-grade solutions for modern microservice architectures.
 
 ## 🚀 Features
 
@@ -44,17 +44,6 @@ A comprehensive, reactive service communication framework for microservice archi
 - [About Firefly Software Solutions Inc](#-about-firefly-software-solutions-inc)
 
 ---
-
-## 🏢 Enterprise Solution by Firefly Software Solutions Inc
-
-The **Firefly Common Client Library** is proudly developed and maintained by **[Firefly Software Solutions Inc](https://firefly-software.com)**, a premier provider of enterprise-grade software solutions. This library represents our commitment to delivering robust, scalable, and production-ready tools for modern microservice architectures.
-
-**Why Choose Firefly Solutions:**
-- ✅ **Enterprise-Grade Quality**: Battle-tested in production environments
-- ✅ **Open Source**: Released under Apache License 2.0
-- ✅ **Professional Support**: Backed by our expert development team
-- ✅ **Continuous Innovation**: Regular updates and feature enhancements
-
 ## 🚀 Quick Start
 
 ### Installation
@@ -712,7 +701,7 @@ limitations under the License.
 - 📊 **Observability Solutions** - Comprehensive monitoring and analytics
 - ☁️ **Cloud-Native Technologies** - Modern containerized and serverless applications
 
-For more information about our products and services, visit [firefly-software.com](https://firefly-software.com)
+For more information about our products and services, visit [getfirefly.io](https://getfirefly.io)
 
 ---
 
