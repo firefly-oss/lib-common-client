@@ -4,8 +4,11 @@
 [![Java](https://img.shields.io/badge/Java-21+-orange)](https://openjdk.java.net/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2+-green)](https://spring.io/projects/spring-boot)
 [![Reactive](https://img.shields.io/badge/Reactive-WebFlux-purple)](https://projectreactor.io/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-A comprehensive, reactive service communication framework for microservice architectures. Provides unified REST and gRPC client interfaces with built-in resilience patterns, circuit breakers, and comprehensive observability.
+A comprehensive, reactive service communication framework for microservice architectures developed by **Firefly Software Solutions Inc**. Provides unified REST and gRPC client interfaces with built-in resilience patterns, circuit breakers, and comprehensive observability.
+
+> **Developed by [Firefly Software Solutions Inc](https://firefly-software.com)** - Building enterprise-grade solutions for modern microservice architectures.
 
 ## 🚀 Features
 
@@ -38,6 +41,19 @@ A comprehensive, reactive service communication framework for microservice archi
 - [Testing](#-testing)
 - [Migration Guide](#-migration-guide)
 - [Contributing](#-contributing)
+- [About Firefly Software Solutions Inc](#-about-firefly-software-solutions-inc)
+
+---
+
+## 🏢 Enterprise Solution by Firefly Software Solutions Inc
+
+The **Firefly Common Client Library** is proudly developed and maintained by **[Firefly Software Solutions Inc](https://firefly-software.com)**, a premier provider of enterprise-grade software solutions. This library represents our commitment to delivering robust, scalable, and production-ready tools for modern microservice architectures.
+
+**Why Choose Firefly Solutions:**
+- ✅ **Enterprise-Grade Quality**: Battle-tested in production environments
+- ✅ **Open Source**: Released under Apache License 2.0
+- ✅ **Professional Support**: Backed by our expert development team
+- ✅ **Continuous Innovation**: Regular updates and feature enhancements
 
 ## 🚀 Quick Start
 
@@ -670,7 +686,9 @@ We welcome contributions! Please follow these guidelines:
 
 ## 📄 License
 
-Copyright 2025 Firefly Software Solutions Inc
+This library is developed and maintained by **Firefly Software Solutions Inc** and is released under the Apache License 2.0.
+
+**Copyright © 2025 Firefly Software Solutions Inc**
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -684,6 +702,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
+## 🏢 About Firefly Software Solutions Inc
+
+**Firefly Software Solutions Inc** is a leading provider of enterprise-grade software solutions specializing in:
+
+- 🏗️ **Microservice Architecture** - Building scalable, resilient distributed systems
+- ⚡ **Reactive Programming** - High-performance, non-blocking applications
+- 🛡️ **Enterprise Integration** - Secure, reliable service communication
+- 📊 **Observability Solutions** - Comprehensive monitoring and analytics
+- ☁️ **Cloud-Native Technologies** - Modern containerized and serverless applications
+
+For more information about our products and services, visit [firefly-software.com](https://firefly-software.com)
+
 ---
 
-**Built with ❤️ by the Firefly Team**
+**Built with ❤️ by the Firefly Software Solutions Team**
