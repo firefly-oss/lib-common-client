@@ -17,8 +17,10 @@
 package com.firefly.common.client.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.firefly.common.client.ClientType;
 import com.firefly.common.client.ServiceClient;
+import com.firefly.common.client.exception.ServiceClientException;
 import com.firefly.common.resilience.CircuitBreakerManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -50,6 +52,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @Slf4j
 public class RestServiceClientImpl implements ServiceClient {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final String serviceName;
     private final String baseUrl;
@@ -393,15 +397,13 @@ public class RestServiceClientImpl implements ServiceClient {
             if (responseType != null) {
                 baseRequest = requestSpec.retrieve().bodyToMono(responseType);
             } else if (typeReference != null) {
-                // For TypeReference, we need to use a different approach
-                // This is a simplified implementation - in practice, you'd need proper Jackson integration
+                // For TypeReference, use shared ObjectMapper instance
                 baseRequest = requestSpec.retrieve().bodyToMono(String.class)
                     .map(json -> {
                         try {
-                            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                            return mapper.readValue(json, typeReference);
+                            return OBJECT_MAPPER.readValue(json, typeReference);
                         } catch (Exception e) {
-                            throw new RuntimeException("Failed to deserialize response", e);
+                            throw new ServiceClientException("Failed to deserialize response: " + e.getMessage(), e);
                         }
                     });
             } else {

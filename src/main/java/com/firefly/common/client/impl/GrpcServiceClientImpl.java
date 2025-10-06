@@ -19,6 +19,8 @@ package com.firefly.common.client.impl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.firefly.common.client.ClientType;
 import com.firefly.common.client.ServiceClient;
+import com.firefly.common.client.exception.ServiceClientException;
+import com.firefly.common.client.exception.ServiceUnavailableException;
 import com.firefly.common.resilience.CircuitBreakerManager;
 import io.grpc.ManagedChannel;
 import lombok.extern.slf4j.Slf4j;
@@ -175,12 +177,12 @@ public class GrpcServiceClientImpl<T> implements ServiceClient {
         // For gRPC, we check if the channel is ready with circuit breaker protection
         Mono<Void> healthCheckOperation = Mono.<Void>fromCallable(() -> {
             if (channel.isShutdown() || channel.isTerminated()) {
-                throw new RuntimeException("gRPC channel is not available");
+                throw new ServiceUnavailableException("gRPC channel is not available for service: " + serviceName);
             }
             return null;
         })
         .timeout(Duration.ofSeconds(5))
-        .onErrorMap(throwable -> new RuntimeException("Health check failed for gRPC service: " + serviceName, throwable));
+        .onErrorMap(throwable -> new ServiceUnavailableException("Health check failed for gRPC service: " + serviceName, throwable));
 
         return applyCircuitBreakerProtection(healthCheckOperation);
     }
@@ -390,8 +392,10 @@ public class GrpcServiceClientImpl<T> implements ServiceClient {
                     // Handle the response
                     return (R) handleGrpcResponse(result);
 
+                } catch (IllegalArgumentException e) {
+                    throw e; // Re-throw as-is
                 } catch (Exception e) {
-                    throw new RuntimeException(
+                    throw new ServiceClientException(
                         String.format("Failed to execute gRPC operation %s: %s",
                             grpcMethodName, e.getMessage()), e);
                 }
@@ -428,7 +432,7 @@ public class GrpcServiceClientImpl<T> implements ServiceClient {
                             grpcMethodName, grpcMethodName)));
 
                 } catch (Exception e) {
-                    return Flux.error(new RuntimeException(
+                    return Flux.error(new ServiceClientException(
                         String.format("Failed to execute streaming gRPC operation %s: %s",
                             grpcMethodName, e.getMessage()), e));
                 }
