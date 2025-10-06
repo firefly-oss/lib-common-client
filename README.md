@@ -135,6 +135,184 @@ implementation 'com.firefly:lib-common-client:1.0.0-SNAPSHOT'
 - **Spring WebFlux**: For reactive support
 - **Project Reactor**: For reactive streams
 
+## 🎯 First Time Setup
+
+This section guides you through setting up your first service client from scratch.
+
+### Step 1: Add the Dependency
+
+Add the library to your `pom.xml` (Maven) or `build.gradle` (Gradle) as shown in the [Installation](#-installation) section above.
+
+### Step 2: Enable Auto-Configuration
+
+The library automatically configures itself when Spring Boot detects it on the classpath. Simply ensure your application has `@SpringBootApplication`:
+
+```java
+@SpringBootApplication
+public class MyApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(MyApplication.class, args);
+        // ✅ ServiceClient components are now automatically available
+    }
+}
+```
+
+### Step 3: Create Your First REST Client
+
+Create a service class and build your first REST client:
+
+```java
+import com.firefly.common.client.ServiceClient;
+import reactor.core.publisher.Mono;
+import org.springframework.stereotype.Service;
+import java.time.Duration;
+
+@Service
+public class UserService {
+
+    private final ServiceClient userClient;
+
+    public UserService() {
+        // Build a REST client with essential properties
+        this.userClient = ServiceClient.rest("user-service")
+            .baseUrl("http://localhost:8080")           // Required: Base URL of the service
+            .timeout(Duration.ofSeconds(30))            // Optional: Request timeout (default: 30s)
+            .jsonContentType()                          // Optional: Set Content-Type to application/json
+            .build();
+    }
+
+    public Mono<User> getUser(String userId) {
+        return userClient.get("/users/{id}", User.class)
+            .withPathParam("id", userId)
+            .execute();
+    }
+}
+```
+
+### Step 4: Configure Properties (Optional)
+
+Create an `application.yml` file to customize client behavior:
+
+```yaml
+firefly:
+  service-client:
+    enabled: true                    # Enable the library (default: true)
+    default-timeout: 30s             # Global timeout for all clients
+    environment: DEVELOPMENT         # DEVELOPMENT, TESTING, or PRODUCTION
+
+    # REST-specific settings
+    rest:
+      max-connections: 100           # Connection pool size
+      response-timeout: 30s          # How long to wait for responses
+      connect-timeout: 10s           # How long to wait for connection
+      compression-enabled: true      # Enable gzip compression
+      logging-enabled: true          # Enable request/response logging (useful for debugging)
+
+    # Circuit breaker for resilience
+    circuit-breaker:
+      enabled: true                  # Enable circuit breaker pattern
+      failure-rate-threshold: 50.0   # Open circuit after 50% failures
+      minimum-number-of-calls: 5     # Need at least 5 calls before evaluating
+```
+
+### Step 5: Understanding Key Properties
+
+#### Essential REST Client Properties
+
+| Property | Description | Default | When to Change |
+|----------|-------------|---------|----------------|
+| `baseUrl()` | The base URL of your service | None (required) | Always set this |
+| `timeout()` | Maximum time to wait for response | 30s | Increase for slow services |
+| `jsonContentType()` | Sets Content-Type to application/json | Not set | Use when sending JSON |
+| `maxConnections()` | Connection pool size | 100 | Increase for high-traffic services |
+| `defaultHeader()` | Add headers to all requests | None | Use for auth tokens, API keys |
+
+#### Essential gRPC Client Properties
+
+| Property | Description | Default | When to Change |
+|----------|-------------|---------|----------------|
+| `address()` | gRPC service address (host:port) | None (required) | Always set this |
+| `usePlaintext()` | Disable TLS (for development) | false | Use in development only |
+| `timeout()` | Maximum time for gRPC calls | 30s | Increase for slow operations |
+| `stubFactory()` | Factory to create gRPC stub | None (required) | Always provide this |
+
+### Step 6: Create Your First gRPC Client (Optional)
+
+If you're using gRPC, here's how to set up your first gRPC client:
+
+```java
+import com.firefly.common.client.ServiceClient;
+import com.firefly.common.client.impl.GrpcServiceClientImpl;
+import com.example.grpc.PaymentServiceGrpc;
+import com.example.grpc.PaymentServiceGrpc.PaymentServiceStub;
+
+@Service
+public class PaymentService {
+
+    private final GrpcServiceClientImpl<PaymentServiceStub> paymentClient;
+
+    public PaymentService() {
+        ServiceClient client = ServiceClient.grpc("payment-service", PaymentServiceStub.class)
+            .address("localhost:9090")                                      // Required: gRPC service address
+            .usePlaintext()                                                 // Optional: Use for development (no TLS)
+            .timeout(Duration.ofSeconds(30))                                // Optional: Call timeout
+            .stubFactory(channel -> PaymentServiceGrpc.newStub(channel))   // Required: How to create the stub
+            .build();
+
+        this.paymentClient = (GrpcServiceClientImpl<PaymentServiceStub>) client;
+    }
+
+    public Mono<PaymentResponse> processPayment(PaymentRequest request) {
+        return paymentClient.executeWithCircuitBreaker(
+            Mono.fromCallable(() -> paymentClient.getStub().processPayment(request))
+        );
+    }
+}
+```
+
+### Step 7: Common Configuration Patterns
+
+#### Pattern 1: Service with Authentication
+
+```java
+ServiceClient authenticatedClient = ServiceClient.rest("secure-service")
+    .baseUrl("https://api.example.com")
+    .defaultHeader("Authorization", "Bearer your-token-here")
+    .defaultHeader("X-API-Key", "your-api-key")
+    .jsonContentType()
+    .build();
+```
+
+#### Pattern 2: High-Performance Service
+
+```java
+ServiceClient highPerfClient = ServiceClient.rest("high-perf-service")
+    .baseUrl("http://fast-service:8080")
+    .timeout(Duration.ofSeconds(5))        // Short timeout for fast service
+    .maxConnections(200)                   // Large connection pool
+    .build();
+```
+
+#### Pattern 3: External Service with Retries
+
+```yaml
+# In application.yml
+firefly:
+  service-client:
+    retry:
+      enabled: true
+      max-attempts: 3                      # Retry up to 3 times
+      initial-interval: 1s                 # Wait 1s before first retry
+      multiplier: 2.0                      # Double wait time each retry
+```
+
+### Next Steps
+
+- **Read the [Quick Start Guide](docs/QUICKSTART.md)** for more examples
+- **See the [Configuration Reference](docs/CONFIGURATION.md)** for all available properties
+- **Check the [Architecture Guide](docs/ARCHITECTURE.md)** to understand how it works
+- **Review [Testing Guide](docs/TESTING.md)** to learn how to test your clients
+
 ## 🔧 Basic Usage
 
 ### REST Client Examples
@@ -299,15 +477,8 @@ firefly:
       slow-call-duration-threshold: 5s
       slow-call-rate-threshold: 100.0
       automatic-transition-from-open-to-half-open-enabled: true
-    
-    # SDK Configuration (for future extensibility)
-    sdk:
-      default-timeout: 45s
-      auto-shutdown-enabled: true
-      max-concurrent-operations: 50
-      logging-enabled: false
-    
-    # Retry Configuration  
+
+    # Retry Configuration
     retry:
       enabled: true
       max-attempts: 3
