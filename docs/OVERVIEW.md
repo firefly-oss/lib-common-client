@@ -4,6 +4,72 @@
 
 The `lib-common-client` library is a comprehensive, reactive service communication framework designed for microservice architectures. It provides a unified API for REST and gRPC communication while maintaining protocol-specific optimizations and built-in resilience patterns.
 
+## Getting Started with Client Setup
+
+### Quick Setup Overview
+
+Setting up a service client involves three main steps:
+
+1. **Choose Client Type**: Decide between REST or gRPC based on your service protocol
+2. **Build the Client**: Use the fluent builder API to configure the client
+3. **Configure Properties**: Optionally customize behavior via `application.yml`
+
+### REST Client Setup
+
+```java
+ServiceClient restClient = ServiceClient.rest("my-service")
+    .baseUrl("http://localhost:8080")      // Required: Service base URL
+    .timeout(Duration.ofSeconds(30))       // Optional: Request timeout
+    .jsonContentType()                     // Optional: Set JSON content type
+    .build();
+```
+
+**Key Configuration Points:**
+- `baseUrl()` is required and specifies where your service is hosted
+- `timeout()` controls how long to wait for responses (default: 30s)
+- `jsonContentType()` sets appropriate headers for JSON communication
+- Additional headers can be added with `defaultHeader(name, value)`
+
+### gRPC Client Setup
+
+```java
+ServiceClient grpcClient = ServiceClient.grpc("payment-service", PaymentServiceStub.class)
+    .address("localhost:9090")                                      // Required: gRPC address
+    .usePlaintext()                                                 // Optional: For development
+    .timeout(Duration.ofSeconds(30))                                // Optional: Call timeout
+    .stubFactory(channel -> PaymentServiceGrpc.newStub(channel))   // Required: Stub factory
+    .build();
+```
+
+**Key Configuration Points:**
+- `address()` specifies the gRPC service host and port
+- `stubFactory()` is required and creates the gRPC stub from a channel
+- `usePlaintext()` disables TLS (use only in development)
+- `useTransportSecurity()` enables TLS for production environments
+
+### Configuration via Properties
+
+Instead of programmatic configuration, you can use `application.yml`:
+
+```yaml
+firefly:
+  service-client:
+    enabled: true
+    default-timeout: 30s
+    environment: DEVELOPMENT
+
+    rest:
+      max-connections: 100
+      response-timeout: 30s
+      compression-enabled: true
+
+    grpc:
+      keep-alive-time: 5m
+      max-inbound-message-size: 4194304
+```
+
+These properties apply globally to all clients created in your application.
+
 ## Core Components
 
 ### ServiceClient Interface
@@ -118,7 +184,6 @@ Custom exceptions for different failure scenarios:
 - **Nested Classes**:
   - `Rest`: REST-specific configuration
   - `Grpc`: gRPC-specific configuration
-  - `Sdk`: SDK-specific configuration
   - `CircuitBreaker`: Circuit breaker configuration
   - `Retry`: Retry configuration
   - `Metrics`: Metrics configuration
