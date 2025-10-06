@@ -2,6 +2,8 @@
 
 Complete configuration reference for the Firefly Common Client Library.
 
+> **Note:** This documentation reflects the actual configuration properties defined in `ServiceClientProperties.java`. All examples and default values are accurate as of the current codebase version.
+
 ## Table of Contents
 
 - [Overview](#overview)

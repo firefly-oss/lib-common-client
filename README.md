@@ -39,7 +39,6 @@ A comprehensive, reactive service communication framework for microservice archi
 - [Architecture](#-architecture)
 - [Documentation](#-documentation)
 - [Testing](#-testing)
-- [Migration Guide](#-migration-guide)
 - [Contributing](#-contributing)
 - [About Firefly Software Solutions Inc](#-about-firefly-software-solutions-inc)
 
@@ -551,7 +550,6 @@ Comprehensive documentation is available in the `/docs` directory:
 - **[🏗️ Architecture Guide](docs/ARCHITECTURE.md)** - Detailed architecture documentation
 - **[⚙️ Configuration Reference](docs/CONFIGURATION.md)** - Complete configuration options
 - **[🧪 Testing Guide](docs/TESTING.md)** - Testing strategies and utilities
-- **[🔧 Migration Guide](../SERVICECLIENT_MIGRATION_GUIDE.md)** - Migration from lib-common-domain
 
 ## 🧪 Testing
 
@@ -640,16 +638,38 @@ class ServiceClientIntegrationTest {
 }
 ```
 
-## 🔄 Migration Guide
+## 📊 Metrics and Observability
 
-Migrating from `lib-common-domain`? See our comprehensive [Migration Guide](../SERVICECLIENT_MIGRATION_GUIDE.md) for step-by-step instructions.
+The library provides comprehensive metrics integration with Micrometer for production observability.
 
-### Quick Migration Summary
+### Available Metrics
 
-1. **Add dependency**: Include `lib-common-client` in your `pom.xml`
-2. **Update imports**: Change package from `com.firefly.common.domain.client` to `com.firefly.common.client`
-3. **Configuration**: All existing configuration properties remain the same
-4. **API**: 100% backward compatible - no code changes needed
+```java
+// Request metrics
+service.client.requests.success{service, client.type}      // Success counter
+service.client.requests.failure{service, client.type}      // Failure counter
+service.client.requests.duration{service, client.type}     // Request duration timer
+
+// Circuit breaker metrics
+service.client.circuit.breaker.state{service, client.type}                    // Current state gauge
+service.client.circuit.breaker.transitions{service, from.state, to.state}     // State transitions
+
+// Error metrics
+service.client.errors{service, client.type, error.type}    // Error type tracking
+```
+
+### Metrics Configuration
+
+```yaml
+firefly:
+  service-client:
+    metrics:
+      enabled: true                  # Enable metrics collection (default: true)
+      detailed-metrics: false        # Include detailed metrics (default: false)
+      histogram-enabled: true        # Include histogram metrics (default: true)
+```
+
+Metrics are automatically exposed when `MeterRegistry` is available in your Spring context and can be visualized in Prometheus, Grafana, or any Micrometer-compatible monitoring system.
 
 ## 🤝 Contributing
 

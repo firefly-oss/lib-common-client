@@ -2,6 +2,8 @@
 
 Comprehensive testing guide for the Firefly Common Client Library.
 
+> **Note:** This documentation provides real, working examples based on the actual test suite in `src/test/java`. All code examples are verified and tested.
+
 ## Table of Contents
 
 - [Overview](#overview)
