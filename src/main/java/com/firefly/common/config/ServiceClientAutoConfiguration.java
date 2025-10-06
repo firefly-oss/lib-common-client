@@ -19,10 +19,13 @@ package com.firefly.common.config;
 import com.firefly.common.client.ServiceClient;
 import com.firefly.common.client.builder.GrpcClientBuilder;
 import com.firefly.common.client.builder.RestClientBuilder;
+import com.firefly.common.client.metrics.ServiceClientMetrics;
 import com.firefly.common.resilience.CircuitBreakerConfig;
 import com.firefly.common.resilience.CircuitBreakerManager;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -171,6 +174,22 @@ public class ServiceClientAutoConfiguration {
     public GrpcClientBuilderFactory grpcClientBuilderFactory(CircuitBreakerManager circuitBreakerManager) {
         log.info("Configuring gRPC client builder factory with enhanced circuit breaker");
         return new GrpcClientBuilderFactory(circuitBreakerManager);
+    }
+
+    /**
+     * Configures ServiceClient metrics integration with Micrometer.
+     *
+     * @param meterRegistry the Micrometer meter registry
+     * @return the ServiceClientMetrics bean
+     */
+    @Bean
+    @ConditionalOnClass(MeterRegistry.class)
+    @ConditionalOnBean(MeterRegistry.class)
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty(prefix = "firefly.service-client.metrics", name = "enabled", havingValue = "true", matchIfMissing = true)
+    public ServiceClientMetrics serviceClientMetrics(MeterRegistry meterRegistry) {
+        log.info("Configuring ServiceClient metrics integration with Micrometer");
+        return new ServiceClientMetrics(meterRegistry);
     }
 
     /**

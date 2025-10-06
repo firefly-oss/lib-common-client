@@ -8,7 +8,6 @@
         <groupId>com.firefly</groupId>
         <artifactId>lib-parent-pom</artifactId>
         <version>1.0.0-SNAPSHOT</version>
-        <relativePath/>
     </parent>
 
     <artifactId>lib-common-client</artifactId>
@@ -20,6 +19,8 @@
 
     <properties>
         <aws.sdk2.version>2.25.32</aws.sdk2.version>
+        <grpc.version>1.60.1</grpc.version>
+        <protobuf.version>3.25.1</protobuf.version>
     </properties>
 
     <dependencies>
@@ -103,22 +104,22 @@
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-netty-shaded</artifactId>
-            <version>1.60.1</version>
+            <version>${grpc.version}</version>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-protobuf</artifactId>
-            <version>1.60.1</version>
+            <version>${grpc.version}</version>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-stub</artifactId>
-            <version>1.60.1</version>
+            <version>${grpc.version}</version>
         </dependency>
         <dependency>
             <groupId>com.google.protobuf</groupId>
             <artifactId>protobuf-java</artifactId>
-            <version>3.25.1</version>
+            <version>${protobuf.version}</version>
         </dependency>
 
         <!-- Circuit Breaker for resilience -->
