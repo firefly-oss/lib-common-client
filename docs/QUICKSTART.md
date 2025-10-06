@@ -28,6 +28,253 @@ public class MyApplication {
 }
 ```
 
+## First Time Setup Guide
+
+This section walks you through creating your first service client step-by-step.
+
+### Understanding the Basics
+
+Before creating a client, understand these key concepts:
+
+1. **Client Type**: Choose REST for HTTP services or gRPC for Protocol Buffer services
+2. **Builder Pattern**: Use fluent API to configure your client
+3. **Reactive Programming**: All operations return `Mono<T>` or `Flux<T>` for non-blocking execution
+4. **Circuit Breaker**: Automatically enabled for resilience
+
+### Your First REST Client - Step by Step
+
+#### Step 1: Create a Service Class
+
+```java
+import com.firefly.common.client.ServiceClient;
+import reactor.core.publisher.Mono;
+import org.springframework.stereotype.Service;
+import java.time.Duration;
+
+@Service
+public class UserService {
+
+    private final ServiceClient userClient;
+
+    // Constructor where we'll build our client
+    public UserService() {
+        // We'll add client configuration here
+    }
+}
+```
+
+#### Step 2: Build the Client with Required Properties
+
+```java
+public UserService() {
+    this.userClient = ServiceClient.rest("user-service")  // Give your client a name
+        .baseUrl("http://localhost:8080")                 // REQUIRED: Where is the service?
+        .build();                                         // Build the client
+}
+```
+
+**What each property means:**
+- `rest("user-service")`: Creates a REST client named "user-service" (used for metrics and logging)
+- `baseUrl("http://localhost:8080")`: **Required** - The base URL of your service
+- `build()`: Finalizes and creates the client instance
+
+#### Step 3: Add Optional Configuration
+
+```java
+public UserService() {
+    this.userClient = ServiceClient.rest("user-service")
+        .baseUrl("http://localhost:8080")
+        .timeout(Duration.ofSeconds(30))                  // How long to wait for responses
+        .jsonContentType()                                // Set Content-Type: application/json
+        .defaultHeader("X-Client-Id", "my-app")          // Add custom headers to all requests
+        .maxConnections(50)                               // Connection pool size
+        .build();
+}
+```
+
+**Optional properties explained:**
+- `timeout()`: Maximum time to wait for a response (default: 30 seconds)
+- `jsonContentType()`: Automatically sets `Content-Type: application/json` header
+- `defaultHeader()`: Adds a header to every request made by this client
+- `maxConnections()`: Size of the connection pool (default: 100)
+
+#### Step 4: Make Your First Request
+
+```java
+public Mono<User> getUser(String userId) {
+    return userClient.get("/users/{id}", User.class)     // GET request, expect User response
+        .withPathParam("id", userId)                      // Replace {id} with actual userId
+        .execute();                                       // Execute and return Mono<User>
+}
+```
+
+**Request building explained:**
+- `get("/users/{id}", User.class)`: HTTP GET to `/users/{id}`, deserialize response to `User`
+- `withPathParam("id", userId)`: Replace `{id}` placeholder with actual value
+- `execute()`: Send the request and return a reactive `Mono<User>`
+
+#### Step 5: Handle the Response
+
+```java
+// In your controller or another service
+public void example() {
+    userService.getUser("123")
+        .subscribe(user -> {
+            System.out.println("Got user: " + user.getName());
+        });
+
+    // Or use it in a reactive chain
+    userService.getUser("123")
+        .map(User::getName)
+        .flatMap(name -> doSomethingElse(name))
+        .subscribe();
+}
+```
+
+### Your First gRPC Client - Step by Step
+
+#### Step 1: Ensure You Have gRPC Stubs
+
+Make sure you've generated your gRPC stubs from `.proto` files. You should have:
+- `PaymentServiceGrpc` class (generated)
+- `PaymentServiceStub` class (generated)
+- Request/Response message classes
+
+#### Step 2: Create the gRPC Client
+
+```java
+import com.firefly.common.client.ServiceClient;
+import com.firefly.common.client.impl.GrpcServiceClientImpl;
+import com.example.grpc.PaymentServiceGrpc;
+import com.example.grpc.PaymentServiceGrpc.PaymentServiceStub;
+
+@Service
+public class PaymentService {
+
+    private final GrpcServiceClientImpl<PaymentServiceStub> paymentClient;
+
+    public PaymentService() {
+        ServiceClient client = ServiceClient.grpc("payment-service", PaymentServiceStub.class)
+            .address("localhost:9090")                                      // REQUIRED: gRPC service address
+            .stubFactory(channel -> PaymentServiceGrpc.newStub(channel))   // REQUIRED: How to create stub
+            .build();
+
+        this.paymentClient = (GrpcServiceClientImpl<PaymentServiceStub>) client;
+    }
+}
+```
+
+**Required gRPC properties:**
+- `grpc("payment-service", PaymentServiceStub.class)`: Create gRPC client with stub type
+- `address("localhost:9090")`: **Required** - gRPC service host and port
+- `stubFactory()`: **Required** - Function that creates your gRPC stub from a channel
+
+#### Step 3: Add Optional gRPC Configuration
+
+```java
+public PaymentService() {
+    ServiceClient client = ServiceClient.grpc("payment-service", PaymentServiceStub.class)
+        .address("localhost:9090")
+        .usePlaintext()                                                 // Disable TLS (dev only!)
+        .timeout(Duration.ofSeconds(30))                                // Call timeout
+        .stubFactory(channel -> PaymentServiceGrpc.newStub(channel))
+        .build();
+
+    this.paymentClient = (GrpcServiceClientImpl<PaymentServiceStub>) client;
+}
+```
+
+**Optional gRPC properties:**
+- `usePlaintext()`: Disables TLS - **only use in development**
+- `useTransportSecurity()`: Enables TLS - **use in production**
+- `timeout()`: Maximum time for gRPC calls
+
+### Configuration via application.yml
+
+Instead of configuring each client programmatically, you can set global defaults:
+
+#### Basic Configuration
+
+```yaml
+firefly:
+  service-client:
+    enabled: true                    # Enable the library
+    default-timeout: 30s             # Default timeout for all clients
+    environment: DEVELOPMENT         # DEVELOPMENT, TESTING, or PRODUCTION
+```
+
+#### REST Configuration
+
+```yaml
+firefly:
+  service-client:
+    rest:
+      max-connections: 100           # Connection pool size
+      response-timeout: 30s          # How long to wait for responses
+      connect-timeout: 10s           # How long to wait to establish connection
+      compression-enabled: true      # Enable gzip compression
+      logging-enabled: true          # Log requests/responses (useful for debugging)
+      default-content-type: "application/json"
+      default-accept-type: "application/json"
+```
+
+**When to change these:**
+- Increase `max-connections` for high-traffic services (e.g., 200-500)
+- Increase `response-timeout` for slow services (e.g., 60s)
+- Enable `logging-enabled` during development for debugging
+- Disable `compression-enabled` if your service doesn't support it
+
+#### gRPC Configuration
+
+```yaml
+firefly:
+  service-client:
+    grpc:
+      keep-alive-time: 5m            # Send keep-alive ping every 5 minutes
+      keep-alive-timeout: 30s        # Wait 30s for keep-alive response
+      max-inbound-message-size: 4194304   # 4MB max message size
+      call-timeout: 30s              # Default call timeout
+      use-plaintext-by-default: true # Use plaintext (dev only!)
+```
+
+#### Circuit Breaker Configuration
+
+The circuit breaker is automatically enabled. Customize it:
+
+```yaml
+firefly:
+  service-client:
+    circuit-breaker:
+      enabled: true                  # Enable circuit breaker
+      failure-rate-threshold: 50.0   # Open circuit after 50% failures
+      minimum-number-of-calls: 5     # Need at least 5 calls before evaluating
+      wait-duration-in-open-state: 60s  # Wait 60s before trying again
+```
+
+**Understanding circuit breaker:**
+- When `failure-rate-threshold` is exceeded, the circuit "opens"
+- When open, requests fail immediately without calling the service
+- After `wait-duration-in-open-state`, it tries again (half-open state)
+- If successful, circuit closes; if failed, stays open
+
+### Property Reference Table
+
+#### Essential Properties Quick Reference
+
+| Property | Type | Required? | Default | Description |
+|----------|------|-----------|---------|-------------|
+| **REST Client** |
+| `baseUrl()` | String | ✅ Yes | None | Base URL of the service |
+| `timeout()` | Duration | No | 30s | Request timeout |
+| `jsonContentType()` | - | No | - | Sets JSON content type |
+| `maxConnections()` | int | No | 100 | Connection pool size |
+| `defaultHeader()` | String, String | No | - | Add default header |
+| **gRPC Client** |
+| `address()` | String | ✅ Yes | None | Service host:port |
+| `stubFactory()` | Function | ✅ Yes | None | Creates gRPC stub |
+| `usePlaintext()` | - | No | false | Disable TLS |
+| `timeout()` | Duration | No | 30s | Call timeout |
+
 ## Basic REST Client
 
 ### Simple GET Request
