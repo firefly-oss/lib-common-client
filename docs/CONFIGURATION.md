@@ -6,6 +6,7 @@ Complete configuration reference for the Firefly Common Client Library.
 
 ## Table of Contents
 
+- [First Time Configuration](#first-time-configuration)
 - [Overview](#overview)
 - [Configuration Properties](#configuration-properties)
 - [REST Configuration](#rest-configuration)
@@ -17,6 +18,105 @@ Complete configuration reference for the Firefly Common Client Library.
 - [Environment-Specific Configuration](#environment-specific-configuration)
 - [Programmatic Configuration](#programmatic-configuration)
 
+## First Time Configuration
+
+If you're setting up the library for the first time, start with this minimal configuration:
+
+### Minimal Configuration (Development)
+
+Create `src/main/resources/application.yml`:
+
+```yaml
+firefly:
+  service-client:
+    enabled: true                    # Enable the library
+    environment: DEVELOPMENT         # Use development defaults
+
+    rest:
+      logging-enabled: true          # See request/response logs for debugging
+```
+
+That's it! The library will use sensible defaults for everything else.
+
+### Recommended Configuration (Development)
+
+For better control during development:
+
+```yaml
+firefly:
+  service-client:
+    enabled: true
+    default-timeout: 30s             # Global timeout for all clients
+    environment: DEVELOPMENT
+
+    rest:
+      max-connections: 50            # Smaller pool for development
+      response-timeout: 30s
+      logging-enabled: true          # Enable logging for debugging
+      compression-enabled: true
+
+    circuit-breaker:
+      enabled: true
+      failure-rate-threshold: 50.0   # Open circuit after 50% failures
+      minimum-number-of-calls: 5     # Need 5 calls before evaluating
+```
+
+### Production Configuration
+
+For production environments:
+
+```yaml
+firefly:
+  service-client:
+    enabled: true
+    default-timeout: 30s
+    environment: PRODUCTION          # Use production optimizations
+
+    rest:
+      max-connections: 200           # Larger pool for production traffic
+      response-timeout: 30s
+      logging-enabled: false         # Disable verbose logging
+      compression-enabled: true
+
+    grpc:
+      use-plaintext-by-default: false  # Enable TLS in production
+      max-concurrent-streams: 200
+
+    circuit-breaker:
+      enabled: true
+      failure-rate-threshold: 50.0
+      minimum-number-of-calls: 10
+
+    security:
+      tls-enabled: true              # Enable TLS
+```
+
+### Understanding Configuration Levels
+
+Configuration can be applied at three levels:
+
+1. **Global Defaults** (via `application.yml`) - Applies to all clients
+2. **Programmatic** (via builder) - Applies to specific client instance
+3. **Environment-Specific** - Automatic adjustments based on `environment` setting
+
+**Priority:** Programmatic > Global Defaults > Environment-Specific
+
+**Example:**
+```yaml
+# Global default timeout
+firefly:
+  service-client:
+    default-timeout: 30s
+```
+
+```java
+// This client overrides the global timeout
+ServiceClient client = ServiceClient.rest("my-service")
+    .baseUrl("http://localhost:8080")
+    .timeout(Duration.ofSeconds(60))  // Overrides global 30s
+    .build();
+```
+
 ## Overview
 
 The library uses Spring Boot's configuration system with the prefix `firefly.service-client`. All properties can be configured via:
@@ -25,6 +125,14 @@ The library uses Spring Boot's configuration system with the prefix `firefly.ser
 - Environment variables (e.g., `FIREFLY_SERVICE_CLIENT_ENABLED=true`)
 - Command-line arguments (e.g., `--firefly.service-client.enabled=true`)
 - Programmatic configuration via Java beans
+
+### Configuration Best Practices
+
+1. **Start Simple**: Begin with minimal configuration and add properties as needed
+2. **Use Environment Profiles**: Leverage `environment: DEVELOPMENT/TESTING/PRODUCTION` for automatic optimizations
+3. **Enable Logging in Dev**: Set `rest.logging-enabled: true` during development
+4. **Tune for Production**: Increase connection pools and disable verbose logging
+5. **Monitor Circuit Breakers**: Adjust thresholds based on your service's behavior
 
 ## Configuration Properties
 
@@ -316,6 +424,263 @@ The library validates configuration on startup. Invalid configurations will caus
 - Failure rate thresholds must be between 0 and 100
 - Retry attempts must be >= 0
 
+## Complete Configuration Examples
+
+### Example 1: Simple Microservice (First Time Setup)
+
+Perfect for getting started with a single REST service:
+
+```yaml
+# application.yml
+firefly:
+  service-client:
+    enabled: true
+    environment: DEVELOPMENT
+
+    rest:
+      logging-enabled: true          # See what's happening
+```
+
+```java
+// UserServiceClient.java
+@Service
+public class UserServiceClient {
+
+    private final ServiceClient client;
+
+    public UserServiceClient() {
+        this.client = ServiceClient.rest("user-service")
+            .baseUrl("http://localhost:8080")
+            .jsonContentType()
+            .build();
+    }
+
+    public Mono<User> getUser(String id) {
+        return client.get("/users/{id}", User.class)
+            .withPathParam("id", id)
+            .execute();
+    }
+}
+```
+
+### Example 2: Multiple Services with Authentication
+
+Common pattern for microservices calling multiple backends:
+
+```yaml
+# application.yml
+firefly:
+  service-client:
+    enabled: true
+    default-timeout: 30s
+    environment: DEVELOPMENT
+
+    # Global headers for all clients
+    default-headers:
+      X-Client-Id: "my-application"
+      X-Client-Version: "1.0.0"
+
+    rest:
+      max-connections: 100
+      compression-enabled: true
+      logging-enabled: true
+```
+
+```java
+// ServiceClientsConfig.java
+@Configuration
+public class ServiceClientsConfig {
+
+    @Value("${auth.token}")
+    private String authToken;
+
+    @Bean
+    public ServiceClient userServiceClient() {
+        return ServiceClient.rest("user-service")
+            .baseUrl("http://user-service:8080")
+            .defaultHeader("Authorization", "Bearer " + authToken)
+            .jsonContentType()
+            .build();
+    }
+
+    @Bean
+    public ServiceClient orderServiceClient() {
+        return ServiceClient.rest("order-service")
+            .baseUrl("http://order-service:8080")
+            .defaultHeader("Authorization", "Bearer " + authToken)
+            .timeout(Duration.ofSeconds(45))  // Orders might take longer
+            .jsonContentType()
+            .build();
+    }
+
+    @Bean
+    public ServiceClient inventoryServiceClient() {
+        return ServiceClient.rest("inventory-service")
+            .baseUrl("http://inventory-service:8080")
+            .defaultHeader("Authorization", "Bearer " + authToken)
+            .timeout(Duration.ofSeconds(10))  // Inventory should be fast
+            .maxConnections(200)              // High traffic service
+            .jsonContentType()
+            .build();
+    }
+}
+```
+
+### Example 3: Production-Ready Configuration
+
+Complete production setup with all resilience features:
+
+```yaml
+# application-prod.yml
+firefly:
+  service-client:
+    enabled: true
+    default-timeout: 30s
+    environment: PRODUCTION
+
+    default-headers:
+      X-Client-Id: "production-app"
+      User-Agent: "MyApp/2.0"
+
+    rest:
+      max-connections: 300
+      max-idle-time: 5m
+      max-life-time: 30m
+      response-timeout: 30s
+      connect-timeout: 10s
+      compression-enabled: true
+      logging-enabled: false         # Disable in production
+      follow-redirects: true
+      max-in-memory-size: 2097152    # 2MB
+
+    grpc:
+      keep-alive-time: 5m
+      keep-alive-timeout: 30s
+      max-inbound-message-size: 8388608  # 8MB
+      use-plaintext-by-default: false    # TLS enabled
+      compression-enabled: true
+      max-concurrent-streams: 200
+
+    circuit-breaker:
+      enabled: true
+      failure-rate-threshold: 50.0
+      minimum-number-of-calls: 10
+      sliding-window-size: 20
+      wait-duration-in-open-state: 60s
+      permitted-number-of-calls-in-half-open-state: 5
+      call-timeout: 10s
+      slow-call-duration-threshold: 5s
+      automatic-transition-from-open-to-half-open-enabled: true
+
+    retry:
+      enabled: true
+      max-attempts: 3
+      initial-interval: 1s
+      multiplier: 2.0
+      max-interval: 30s
+
+    metrics:
+      enabled: true
+      collect-detailed-metrics: true
+
+    security:
+      tls-enabled: true
+```
+
+### Example 4: Mixed REST and gRPC Services
+
+Using both REST and gRPC in the same application:
+
+```yaml
+# application.yml
+firefly:
+  service-client:
+    enabled: true
+    environment: DEVELOPMENT
+
+    rest:
+      max-connections: 100
+      logging-enabled: true
+
+    grpc:
+      use-plaintext-by-default: true  # Dev only
+      max-inbound-message-size: 4194304
+```
+
+```java
+@Configuration
+public class MixedServiceConfig {
+
+    // REST client for user service
+    @Bean
+    public ServiceClient userRestClient() {
+        return ServiceClient.rest("user-service")
+            .baseUrl("http://localhost:8080")
+            .jsonContentType()
+            .build();
+    }
+
+    // gRPC client for payment service
+    @Bean
+    public ServiceClient paymentGrpcClient() {
+        return ServiceClient.grpc("payment-service", PaymentServiceStub.class)
+            .address("localhost:9090")
+            .usePlaintext()
+            .stubFactory(channel -> PaymentServiceGrpc.newStub(channel))
+            .build();
+    }
+}
+```
+
+### Example 5: Environment-Specific Profiles
+
+Different configurations for different environments:
+
+```yaml
+# application.yml (common settings)
+firefly:
+  service-client:
+    enabled: true
+
+    circuit-breaker:
+      enabled: true
+
+---
+# application-dev.yml
+firefly:
+  service-client:
+    environment: DEVELOPMENT
+    rest:
+      logging-enabled: true
+      max-connections: 50
+    grpc:
+      use-plaintext-by-default: true
+
+---
+# application-test.yml
+firefly:
+  service-client:
+    environment: TESTING
+    rest:
+      logging-enabled: false
+      max-connections: 20
+    circuit-breaker:
+      minimum-number-of-calls: 2  # Faster failure detection in tests
+
+---
+# application-prod.yml
+firefly:
+  service-client:
+    environment: PRODUCTION
+    rest:
+      logging-enabled: false
+      max-connections: 300
+    grpc:
+      use-plaintext-by-default: false
+    security:
+      tls-enabled: true
+```
+
 ## Best Practices
 
 1. **Use environment-specific profiles** - Separate configurations for dev, test, and prod
@@ -324,6 +689,10 @@ The library validates configuration on startup. Invalid configurations will caus
 4. **Use TLS in production** - Always enable security for production environments
 5. **Monitor connection pools** - Adjust `max-connections` based on load
 6. **Set appropriate timeouts** - Balance between user experience and resource usage
+7. **Start with defaults** - Only override properties when you have a specific need
+8. **Enable logging in development** - Helps debug integration issues
+9. **Test circuit breaker behavior** - Ensure it works as expected for your use case
+10. **Document custom configurations** - Explain why you deviated from defaults
 
 ## Troubleshooting
 
