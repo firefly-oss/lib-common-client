@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.firefly.common.client.exception;
 
-package com.firefly.common.resilience;
+import java.time.Duration;
 
 /**
  * Exception thrown when a call through a circuit breaker times out.
@@ -22,10 +23,12 @@ package com.firefly.common.resilience;
  * <p>This exception indicates that a call took longer than the configured
  * timeout duration and was cancelled by the circuit breaker.
  *
+ * <p>This error is retryable as timeouts may be transient.
+ *
  * @author Firefly Software Solutions Inc
  * @since 2.0.0
  */
-public class CircuitBreakerTimeoutException extends RuntimeException {
+public class CircuitBreakerTimeoutException extends ServiceTimeoutException {
     
     /**
      * Constructs a new CircuitBreakerTimeoutException with the specified detail message.
@@ -45,4 +48,31 @@ public class CircuitBreakerTimeoutException extends RuntimeException {
     public CircuitBreakerTimeoutException(String message, Throwable cause) {
         super(message, cause);
     }
+
+    /**
+     * Constructs a new CircuitBreakerTimeoutException with the specified detail message and error context.
+     *
+     * @param message the detail message
+     * @param errorContext rich context information about the error
+     */
+    public CircuitBreakerTimeoutException(String message, ErrorContext errorContext) {
+        super(message, errorContext);
+    }
+
+    /**
+     * Constructs a new CircuitBreakerTimeoutException with the specified detail message, error context, and cause.
+     *
+     * @param message the detail message
+     * @param errorContext rich context information about the error
+     * @param cause the cause
+     */
+    public CircuitBreakerTimeoutException(String message, ErrorContext errorContext, Throwable cause) {
+        super(message, errorContext, cause);
+    }
+
+    @Override
+    public ErrorCategory getErrorCategory() {
+        return ErrorCategory.CIRCUIT_BREAKER_ERROR;
+    }
 }
+
