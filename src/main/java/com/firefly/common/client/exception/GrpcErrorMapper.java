@@ -71,37 +71,37 @@ public class GrpcErrorMapper {
      * Creates the appropriate exception based on gRPC status code.
      */
     private static ServiceClientException createException(
-            Status.Code code, 
-            String description, 
+            Status.Code code,
+            String description,
             ErrorContext context,
             Throwable cause) {
-        
+
         String message = description != null ? description : code.name();
-        
+
         return switch (code) {
-            case INVALID_ARGUMENT, FAILED_PRECONDITION, OUT_OF_RANGE -> 
-                new ServiceValidationException(message, context);
-            case UNAUTHENTICATED, PERMISSION_DENIED -> 
-                new ServiceAuthenticationException(message, context);
-            case NOT_FOUND -> 
-                new ServiceNotFoundException(message, context);
-            case DEADLINE_EXCEEDED -> 
-                new ServiceTimeoutException(message, context);
-            case ABORTED -> 
-                new ServiceConflictException(message, context);
-            case RESOURCE_EXHAUSTED -> 
-                new ServiceRateLimitException(message, null, context);
-            case INTERNAL, DATA_LOSS, UNKNOWN -> 
-                new ServiceInternalErrorException(message, context);
-            case UNAVAILABLE -> 
-                new ServiceTemporarilyUnavailableException(message, context);
-            case UNIMPLEMENTED -> 
-                new ServiceClientException("Method not implemented: " + message, context);
-            case CANCELLED -> 
-                new ServiceClientException("Request cancelled: " + message, context);
-            case ALREADY_EXISTS -> 
-                new ServiceConflictException("Resource already exists: " + message, context);
-            default -> 
+            case INVALID_ARGUMENT, FAILED_PRECONDITION, OUT_OF_RANGE ->
+                new ServiceValidationException(message, context, cause);
+            case UNAUTHENTICATED, PERMISSION_DENIED ->
+                new ServiceAuthenticationException(message, context, cause);
+            case NOT_FOUND ->
+                new ServiceNotFoundException(message, context, cause);
+            case DEADLINE_EXCEEDED ->
+                new ServiceTimeoutException(message, context, cause);
+            case ABORTED ->
+                new ServiceConflictException(message, context, cause);
+            case RESOURCE_EXHAUSTED ->
+                new ServiceRateLimitException(message, null, context, cause);
+            case INTERNAL, DATA_LOSS, UNKNOWN ->
+                new ServiceInternalErrorException(message, context, cause);
+            case UNAVAILABLE ->
+                new ServiceTemporarilyUnavailableException(message, context, cause);
+            case UNIMPLEMENTED ->
+                new ServiceClientException("Method not implemented: " + message, context, cause);
+            case CANCELLED ->
+                new ServiceClientException("Request cancelled: " + message, context, cause);
+            case ALREADY_EXISTS ->
+                new ServiceConflictException("Resource already exists: " + message, context, cause);
+            default ->
                 new ServiceClientException("gRPC error [" + code + "]: " + message, context, cause);
         };
     }

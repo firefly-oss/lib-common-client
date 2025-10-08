@@ -18,10 +18,12 @@ package com.firefly.common.client.exception;
 
 /**
  * Exception thrown when WSDL parsing or service initialization fails.
- * 
+ *
  * <p>This exception indicates problems with WSDL retrieval, parsing,
  * or service port initialization. It typically occurs during client
  * construction rather than during request execution.
+ *
+ * <p>This error is NOT retryable as it indicates a configuration problem.
  *
  * @author Firefly Software Solutions Inc
  * @since 2.0.0
@@ -54,6 +56,32 @@ public class WsdlParsingException extends ServiceClientException {
      */
     public WsdlParsingException(Throwable cause) {
         super("Failed to parse WSDL: " + cause.getMessage(), cause);
+    }
+
+    /**
+     * Creates a new WSDL parsing exception with error context.
+     *
+     * @param message the error message
+     * @param errorContext rich context information about the error
+     */
+    public WsdlParsingException(String message, ErrorContext errorContext) {
+        super(message, errorContext);
+    }
+
+    /**
+     * Creates a new WSDL parsing exception with error context and cause.
+     *
+     * @param message the error message
+     * @param errorContext rich context information about the error
+     * @param cause the underlying cause
+     */
+    public WsdlParsingException(String message, ErrorContext errorContext, Throwable cause) {
+        super(message, errorContext, cause);
+    }
+
+    @Override
+    public ErrorCategory getErrorCategory() {
+        return ErrorCategory.CONFIGURATION_ERROR;
     }
 }
 

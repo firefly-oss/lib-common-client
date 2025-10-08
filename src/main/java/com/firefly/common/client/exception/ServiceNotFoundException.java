@@ -18,7 +18,9 @@ package com.firefly.common.client.exception;
 /**
  * Exception thrown when a service endpoint or resource is not found.
  * This typically corresponds to HTTP 404 responses or gRPC NOT_FOUND status.
- * 
+ *
+ * <p>This error is NOT retryable as the resource does not exist.
+ *
  * @author Firefly Software Solutions Inc
  * @since 1.0.0
  */
@@ -50,5 +52,31 @@ public class ServiceNotFoundException extends ServiceClientException {
      */
     public ServiceNotFoundException(Throwable cause) {
         super(cause);
+    }
+
+    /**
+     * Constructs a new ServiceNotFoundException with the specified detail message and error context.
+     *
+     * @param message the detail message explaining the cause of the exception
+     * @param errorContext rich context information about the error
+     */
+    public ServiceNotFoundException(String message, ErrorContext errorContext) {
+        super(message, errorContext);
+    }
+
+    /**
+     * Constructs a new ServiceNotFoundException with the specified detail message, error context, and cause.
+     *
+     * @param message the detail message explaining the cause of the exception
+     * @param errorContext rich context information about the error
+     * @param cause the underlying cause of this exception
+     */
+    public ServiceNotFoundException(String message, ErrorContext errorContext, Throwable cause) {
+        super(message, errorContext, cause);
+    }
+
+    @Override
+    public ErrorCategory getErrorCategory() {
+        return ErrorCategory.CLIENT_ERROR;
     }
 }

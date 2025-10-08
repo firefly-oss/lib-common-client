@@ -18,7 +18,9 @@ package com.firefly.common.client.exception;
 /**
  * Exception thrown when service request validation fails.
  * This typically corresponds to HTTP 400 responses or gRPC INVALID_ARGUMENT status.
- * 
+ *
+ * <p>This error is NOT retryable as it requires fixing the request data.
+ *
  * @author Firefly Software Solutions Inc
  * @since 1.0.0
  */
@@ -50,5 +52,31 @@ public class ServiceValidationException extends ServiceClientException {
      */
     public ServiceValidationException(Throwable cause) {
         super(cause);
+    }
+
+    /**
+     * Constructs a new ServiceValidationException with the specified detail message and error context.
+     *
+     * @param message the detail message explaining the cause of the exception
+     * @param errorContext rich context information about the error
+     */
+    public ServiceValidationException(String message, ErrorContext errorContext) {
+        super(message, errorContext);
+    }
+
+    /**
+     * Constructs a new ServiceValidationException with the specified detail message, error context, and cause.
+     *
+     * @param message the detail message explaining the cause of the exception
+     * @param errorContext rich context information about the error
+     * @param cause the underlying cause of this exception
+     */
+    public ServiceValidationException(String message, ErrorContext errorContext, Throwable cause) {
+        super(message, errorContext, cause);
+    }
+
+    @Override
+    public ErrorCategory getErrorCategory() {
+        return ErrorCategory.VALIDATION_ERROR;
     }
 }

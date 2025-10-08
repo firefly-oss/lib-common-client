@@ -18,7 +18,7 @@ package com.firefly.common.client.exception;
 /**
  * Exception thrown when a service is temporarily or permanently unavailable.
  * This typically corresponds to HTTP 5xx responses or gRPC UNAVAILABLE/DEADLINE_EXCEEDED status.
- * 
+ *
  * @author Firefly Software Solutions Inc
  * @since 1.0.0
  */
@@ -50,5 +50,31 @@ public class ServiceUnavailableException extends ServiceClientException {
      */
     public ServiceUnavailableException(Throwable cause) {
         super(cause);
+    }
+
+    /**
+     * Constructs a new ServiceUnavailableException with the specified detail message and error context.
+     *
+     * @param message the detail message explaining the cause of the exception
+     * @param errorContext rich context information about the error
+     */
+    public ServiceUnavailableException(String message, ErrorContext errorContext) {
+        super(message, errorContext);
+    }
+
+    /**
+     * Constructs a new ServiceUnavailableException with the specified detail message, error context, and cause.
+     *
+     * @param message the detail message explaining the cause of the exception
+     * @param errorContext rich context information about the error
+     * @param cause the underlying cause of this exception
+     */
+    public ServiceUnavailableException(String message, ErrorContext errorContext, Throwable cause) {
+        super(message, errorContext, cause);
+    }
+
+    @Override
+    public ErrorCategory getErrorCategory() {
+        return ErrorCategory.SERVER_ERROR;
     }
 }

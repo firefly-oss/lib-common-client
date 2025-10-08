@@ -18,7 +18,9 @@ package com.firefly.common.client.exception;
 /**
  * Exception thrown when service authentication or authorization fails.
  * This typically corresponds to HTTP 401/403 responses or gRPC UNAUTHENTICATED/PERMISSION_DENIED status.
- * 
+ *
+ * <p>This error is NOT retryable as it requires fixing authentication/authorization.
+ *
  * @author Firefly Software Solutions Inc
  * @since 1.0.0
  */
@@ -50,5 +52,31 @@ public class ServiceAuthenticationException extends ServiceClientException {
      */
     public ServiceAuthenticationException(Throwable cause) {
         super(cause);
+    }
+
+    /**
+     * Constructs a new ServiceAuthenticationException with the specified detail message and error context.
+     *
+     * @param message the detail message explaining the cause of the exception
+     * @param errorContext rich context information about the error
+     */
+    public ServiceAuthenticationException(String message, ErrorContext errorContext) {
+        super(message, errorContext);
+    }
+
+    /**
+     * Constructs a new ServiceAuthenticationException with the specified detail message, error context, and cause.
+     *
+     * @param message the detail message explaining the cause of the exception
+     * @param errorContext rich context information about the error
+     * @param cause the underlying cause of this exception
+     */
+    public ServiceAuthenticationException(String message, ErrorContext errorContext, Throwable cause) {
+        super(message, errorContext, cause);
+    }
+
+    @Override
+    public ErrorCategory getErrorCategory() {
+        return ErrorCategory.AUTHENTICATION_ERROR;
     }
 }

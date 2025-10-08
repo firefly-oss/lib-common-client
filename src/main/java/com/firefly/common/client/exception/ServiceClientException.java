@@ -15,14 +15,36 @@
  */
 package com.firefly.common.client.exception;
 
+import lombok.Getter;
+
 /**
  * Base exception for all ServiceClient-related errors.
- * This exception serves as the parent class for all service communication failures.
- * 
+ *
+ * <p>This exception serves as the parent class for all service communication failures.
+ * It includes rich error context with metadata about the service, request, and error details.
+ *
+ * <p>Example usage:
+ * <pre>{@code
+ * try {
+ *     User user = client.get("/users/123", User.class).execute().block();
+ * } catch (ServiceClientException e) {
+ *     ErrorContext ctx = e.getErrorContext();
+ *     log.error("Error: {} | Service: {} | Status: {} | RequestID: {}",
+ *         e.getMessage(), ctx.getServiceName(),
+ *         ctx.getHttpStatusCode(), ctx.getRequestId());
+ * }
+ * }</pre>
+ *
  * @author Firefly Software Solutions Inc
  * @since 1.0.0
  */
+@Getter
 public class ServiceClientException extends RuntimeException {
+
+    /**
+     * Rich context information about the error.
+     */
+    private final ErrorContext errorContext;
 
     /**
      * Constructs a new ServiceClientException with the specified detail message.
@@ -30,7 +52,7 @@ public class ServiceClientException extends RuntimeException {
      * @param message the detail message explaining the cause of the exception
      */
     public ServiceClientException(String message) {
-        super(message);
+        this(message, ErrorContext.empty());
     }
 
     /**
@@ -40,7 +62,7 @@ public class ServiceClientException extends RuntimeException {
      * @param cause the underlying cause of this exception
      */
     public ServiceClientException(String message, Throwable cause) {
-        super(message, cause);
+        this(message, ErrorContext.empty(), cause);
     }
 
     /**
@@ -49,6 +71,83 @@ public class ServiceClientException extends RuntimeException {
      * @param cause the underlying cause of this exception
      */
     public ServiceClientException(Throwable cause) {
-        super(cause);
+        this(cause.getMessage(), ErrorContext.empty(), cause);
+    }
+
+    /**
+     * Constructs a new ServiceClientException with the specified detail message and error context.
+     *
+     * @param message the detail message explaining the cause of the exception
+     * @param errorContext rich context information about the error
+     */
+    public ServiceClientException(String message, ErrorContext errorContext) {
+        super(enrichMessage(message, errorContext));
+        this.errorContext = errorContext != null ? errorContext : ErrorContext.empty();
+    }
+
+    /**
+     * Constructs a new ServiceClientException with the specified detail message, error context, and cause.
+     *
+     * @param message the detail message explaining the cause of the exception
+     * @param errorContext rich context information about the error
+     * @param cause the underlying cause of this exception
+     */
+    public ServiceClientException(String message, ErrorContext errorContext, Throwable cause) {
+        super(enrichMessage(message, errorContext), cause);
+        this.errorContext = errorContext != null ? errorContext : ErrorContext.empty();
+    }
+
+    /**
+     * Enriches the error message with context information.
+     *
+     * @param message the base error message
+     * @param context the error context
+     * @return enriched error message
+     */
+    private static String enrichMessage(String message, ErrorContext context) {
+        if (context == null || context == ErrorContext.empty()) {
+            return message;
+        }
+
+        StringBuilder enriched = new StringBuilder(message != null ? message : "Service client error");
+
+        if (context.getServiceName() != null) {
+            enriched.append(" | Service: ").append(context.getServiceName());
+        }
+
+        if (context.getEndpoint() != null) {
+            enriched.append(" | Endpoint: ").append(context.getEndpoint());
+        }
+
+        if (context.getHttpStatusCode() != null) {
+            enriched.append(" | HTTP Status: ").append(context.getHttpStatusCode());
+        }
+
+        if (context.getGrpcStatusCode() != null) {
+            enriched.append(" | gRPC Status: ").append(context.getGrpcStatusCode());
+        }
+
+        if (context.getRequestId() != null) {
+            enriched.append(" | Request ID: ").append(context.getRequestId());
+        }
+
+        if (context.getElapsedTime() != null) {
+            enriched.append(" | Duration: ").append(context.getElapsedTime().toMillis()).append("ms");
+        }
+
+        if (context.isRetry()) {
+            enriched.append(" | Retry: ").append(context.getRetryAttempt());
+        }
+
+        return enriched.toString();
+    }
+
+    /**
+     * Gets the error category for this exception.
+     *
+     * @return the error category
+     */
+    public ErrorCategory getErrorCategory() {
+        return ErrorCategory.UNKNOWN_ERROR;
     }
 }

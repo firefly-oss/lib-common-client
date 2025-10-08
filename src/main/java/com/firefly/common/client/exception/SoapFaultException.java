@@ -99,9 +99,46 @@ public class SoapFaultException extends ServiceClientException {
      * @param faultDetail the fault detail
      * @param cause the underlying cause
      */
-    public SoapFaultException(QName faultCode, String faultString, String faultActor, 
+    public SoapFaultException(QName faultCode, String faultString, String faultActor,
                              String faultDetail, Throwable cause) {
         super(buildMessage(faultCode, faultString, faultActor, faultDetail), cause);
+        this.faultCode = faultCode;
+        this.faultString = faultString;
+        this.faultActor = faultActor;
+        this.faultDetail = faultDetail;
+    }
+
+    /**
+     * Creates a new SOAP fault exception with error context.
+     *
+     * @param faultCode the fault code
+     * @param faultString the fault string
+     * @param faultActor the fault actor
+     * @param faultDetail the fault detail
+     * @param errorContext rich context information about the error
+     */
+    public SoapFaultException(QName faultCode, String faultString, String faultActor,
+                             String faultDetail, ErrorContext errorContext) {
+        super(buildMessage(faultCode, faultString, faultActor, faultDetail), errorContext);
+        this.faultCode = faultCode;
+        this.faultString = faultString;
+        this.faultActor = faultActor;
+        this.faultDetail = faultDetail;
+    }
+
+    /**
+     * Creates a new SOAP fault exception with error context and cause.
+     *
+     * @param faultCode the fault code
+     * @param faultString the fault string
+     * @param faultActor the fault actor
+     * @param faultDetail the fault detail
+     * @param errorContext rich context information about the error
+     * @param cause the underlying cause
+     */
+    public SoapFaultException(QName faultCode, String faultString, String faultActor,
+                             String faultDetail, ErrorContext errorContext, Throwable cause) {
+        super(buildMessage(faultCode, faultString, faultActor, faultDetail), errorContext, cause);
         this.faultCode = faultCode;
         this.faultString = faultString;
         this.faultActor = faultActor;
@@ -114,7 +151,7 @@ public class SoapFaultException extends ServiceClientException {
      * @return true if the fault code indicates a client error
      */
     public boolean isClientFault() {
-        return faultCode != null && 
+        return faultCode != null &&
                (faultCode.getLocalPart().equalsIgnoreCase("Client") ||
                 faultCode.getLocalPart().equalsIgnoreCase("Sender"));
     }
@@ -125,7 +162,7 @@ public class SoapFaultException extends ServiceClientException {
      * @return true if the fault code indicates a server error
      */
     public boolean isServerFault() {
-        return faultCode != null && 
+        return faultCode != null &&
                (faultCode.getLocalPart().equalsIgnoreCase("Server") ||
                 faultCode.getLocalPart().equalsIgnoreCase("Receiver"));
     }
@@ -136,8 +173,18 @@ public class SoapFaultException extends ServiceClientException {
      * @return true if the fault code indicates a version mismatch
      */
     public boolean isVersionMismatchFault() {
-        return faultCode != null && 
+        return faultCode != null &&
                faultCode.getLocalPart().equalsIgnoreCase("VersionMismatch");
+    }
+
+    @Override
+    public ErrorCategory getErrorCategory() {
+        if (isClientFault()) {
+            return ErrorCategory.CLIENT_ERROR;
+        } else if (isServerFault()) {
+            return ErrorCategory.SERVER_ERROR;
+        }
+        return ErrorCategory.UNKNOWN_ERROR;
     }
 
     /**
