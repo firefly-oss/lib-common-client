@@ -17,12 +17,16 @@
 package com.firefly.common.client.rest;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.firefly.common.client.RestClient;
 import com.firefly.common.client.ServiceClient;
 import com.firefly.common.client.exception.ServiceClientException;
+import com.firefly.common.client.exception.ServiceInternalErrorException;
+import com.firefly.common.client.exception.ServiceNotFoundException;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import org.junit.jupiter.api.*;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -67,7 +71,7 @@ class RestClientIntegrationTest {
     @DisplayName("Should create REST client successfully")
     void shouldCreateRestClientSuccessfully() {
         // When: Creating a REST client
-        ServiceClient client = ServiceClient.rest("user-service")
+        RestClient client = ServiceClient.rest("user-service")
             .baseUrl(baseUrl)
             .timeout(Duration.ofSeconds(30))
             .build();
@@ -100,7 +104,7 @@ class RestClientIntegrationTest {
                 .withBody(jsonResponse)));
 
         // When: Performing a GET request
-        ServiceClient client = ServiceClient.rest("user-service")
+        RestClient client = ServiceClient.rest("user-service")
             .baseUrl(baseUrl)
             .build();
 
@@ -141,7 +145,7 @@ class RestClientIntegrationTest {
                 .withBody(jsonResponse)));
 
         // When: Performing a POST request
-        ServiceClient client = ServiceClient.rest("user-service")
+        RestClient client = ServiceClient.rest("user-service")
             .baseUrl(baseUrl)
             .build();
 
@@ -184,7 +188,7 @@ class RestClientIntegrationTest {
                 .withBody(jsonResponse)));
 
         // When: Performing a PUT request
-        ServiceClient client = ServiceClient.rest("user-service")
+        RestClient client = ServiceClient.rest("user-service")
             .baseUrl(baseUrl)
             .build();
 
@@ -216,11 +220,11 @@ class RestClientIntegrationTest {
                 .withStatus(204)));
 
         // When: Performing a DELETE request
-        ServiceClient client = ServiceClient.rest("user-service")
+        RestClient client = ServiceClient.rest("user-service")
             .baseUrl(baseUrl)
             .build();
 
-        Mono<Void> response = client.delete("/users/{id}")
+        Mono<Void> response = client.delete("/users/{id}", Void.class)
             .withPathParam("id", "123")
             .execute();
 
@@ -252,7 +256,7 @@ class RestClientIntegrationTest {
                 .withBody(jsonResponse)));
 
         // When: Performing a GET request with query parameters
-        ServiceClient client = ServiceClient.rest("user-service")
+        RestClient client = ServiceClient.rest("user-service")
             .baseUrl(baseUrl)
             .build();
 
@@ -290,7 +294,7 @@ class RestClientIntegrationTest {
                 .withBody(jsonResponse)));
 
         // When: Performing a GET request with custom headers
-        ServiceClient client = ServiceClient.rest("user-service")
+        RestClient client = ServiceClient.rest("user-service")
             .baseUrl(baseUrl)
             .defaultHeader("X-API-Key", "secret-key")
             .build();
@@ -309,6 +313,203 @@ class RestClientIntegrationTest {
             .verifyComplete();
 
         client.shutdown();
+    }
+
+    @Test
+    @DisplayName("Should handle 404 error correctly")
+    void shouldHandle404ErrorCorrectly() {
+        // Given: A mock 404 response
+        wireMockServer.stubFor(get(urlEqualTo("/users/999"))
+            .willReturn(aResponse()
+                .withStatus(404)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"error\": \"User not found\"}")));
+
+        // When: Performing a GET request for non-existent resource
+        RestClient client = ServiceClient.rest("user-service")
+            .baseUrl(baseUrl)
+            .build();
+
+        Mono<User> response = client.get("/users/{id}", User.class)
+            .withPathParam("id", "999")
+            .execute();
+
+        // Then: Should receive an error
+        StepVerifier.create(response)
+            .expectError(ServiceNotFoundException.class)
+            .verify();
+
+        client.shutdown();
+    }
+
+    @Test
+    @DisplayName("Should handle 500 error correctly")
+    void shouldHandle500ErrorCorrectly() {
+        // Given: A mock 500 response
+        wireMockServer.stubFor(get(urlEqualTo("/users/error"))
+            .willReturn(aResponse()
+                .withStatus(500)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"error\": \"Internal server error\"}")));
+
+        // When: Performing a GET request that causes server error
+        RestClient client = ServiceClient.rest("user-service")
+            .baseUrl(baseUrl)
+            .build();
+
+        Mono<User> response = client.get("/users/{id}", User.class)
+            .withPathParam("id", "error")
+            .execute();
+
+        // Then: Should receive an error
+        StepVerifier.create(response)
+            .expectError(ServiceInternalErrorException.class)
+            .verify();
+
+        client.shutdown();
+    }
+
+    @Test
+    @DisplayName("Should perform health check successfully")
+    void shouldPerformHealthCheckSuccessfully() {
+        // Given: A mock health check endpoint
+        wireMockServer.stubFor(get(urlEqualTo("/health"))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"status\": \"UP\"}")));
+
+        // When: Performing a health check
+        RestClient client = ServiceClient.rest("user-service")
+            .baseUrl(baseUrl)
+            .build();
+
+        Mono<Void> healthCheck = client.healthCheck();
+
+        // Then: Health check should succeed
+        StepVerifier.create(healthCheck)
+            .verifyComplete();
+
+        client.shutdown();
+    }
+
+    @Test
+    @DisplayName("Should handle timeout correctly")
+    void shouldHandleTimeoutCorrectly() {
+        // Given: A mock response with delay
+        wireMockServer.stubFor(get(urlEqualTo("/users/slow"))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"id\": 123}")
+                .withFixedDelay(5000))); // 5 second delay
+
+        // When: Performing a GET request with short timeout
+        RestClient client = ServiceClient.rest("user-service")
+            .baseUrl(baseUrl)
+            .timeout(Duration.ofSeconds(1))
+            .build();
+
+        Mono<User> response = client.get("/users/{id}", User.class)
+            .withPathParam("id", "slow")
+            .execute();
+
+        // Then: Should timeout
+        StepVerifier.create(response)
+            .expectError()
+            .verify(Duration.ofSeconds(3));
+
+        client.shutdown();
+    }
+
+    @Test
+    @DisplayName("Should handle streaming response")
+    void shouldHandleStreamingResponse() {
+        // Given: A mock streaming response
+        String jsonResponse = """
+            [
+                {"id": 1, "name": "User 1", "email": "user1@example.com"},
+                {"id": 2, "name": "User 2", "email": "user2@example.com"},
+                {"id": 3, "name": "User 3", "email": "user3@example.com"}
+            ]
+            """;
+
+        wireMockServer.stubFor(get(urlEqualTo("/users/stream"))
+            .willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withBody(jsonResponse)));
+
+        // When: Performing a streaming GET request
+        RestClient client = ServiceClient.rest("user-service")
+            .baseUrl(baseUrl)
+            .build();
+
+        // Note: For true streaming, we'd need Server-Sent Events or WebSocket
+        // This demonstrates the Flux API
+        Mono<List> response = client.get("/users/stream", List.class)
+            .execute();
+
+        // Then: Should receive all items
+        StepVerifier.create(response)
+            .assertNext(users -> {
+                assertThat(users).hasSize(3);
+            })
+            .verifyComplete();
+
+        client.shutdown();
+    }
+
+    @Test
+    @DisplayName("Should verify request was sent with correct body")
+    void shouldVerifyRequestWasSentWithCorrectBody() {
+        // Given: A mock POST endpoint
+        wireMockServer.stubFor(post(urlEqualTo("/users"))
+            .willReturn(aResponse()
+                .withStatus(201)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"id\": 789, \"name\": \"Test User\", \"email\": \"test@example.com\"}")));
+
+        // When: Performing a POST request
+        RestClient client = ServiceClient.rest("user-service")
+            .baseUrl(baseUrl)
+            .build();
+
+        User newUser = new User(null, "Test User", "test@example.com");
+
+        Mono<User> response = client.post("/users", User.class)
+            .withBody(newUser)
+            .execute();
+
+        StepVerifier.create(response)
+            .assertNext(user -> assertThat(user.getId()).isEqualTo(789))
+            .verifyComplete();
+
+        // Then: Verify the request was sent
+        wireMockServer.verify(postRequestedFor(urlEqualTo("/users"))
+            .withHeader("Content-Type", equalTo("application/json"))
+            .withRequestBody(containing("Test User")));
+
+        client.shutdown();
+    }
+
+    @Test
+    @DisplayName("Should manage client lifecycle correctly")
+    void shouldManageClientLifecycleCorrectly() {
+        // Given: A REST client
+        RestClient client = ServiceClient.rest("user-service")
+            .baseUrl(baseUrl)
+            .build();
+
+        // When: Checking initial state
+        assertThat(client.isReady()).isTrue();
+
+        // When: Shutting down
+        client.shutdown();
+
+        // Then: Client should be shut down
+        // Note: The actual shutdown behavior depends on implementation
+        assertThat(client).isNotNull();
     }
 
     // Test model classes

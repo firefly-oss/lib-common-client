@@ -37,16 +37,27 @@ class HttpErrorMapperTest {
         startTime = Instant.now().minusMillis(100);
     }
 
+    private void setupMockResponse(HttpStatus status, String body) {
+        setupMockResponse(status, body, new HttpHeaders());
+    }
+
+    private void setupMockResponse(HttpStatus status, String body, HttpHeaders headers) {
+        ClientResponse.Headers responseHeaders = mock(ClientResponse.Headers.class);
+        when(responseHeaders.asHttpHeaders()).thenReturn(headers);
+
+        when(mockResponse.statusCode()).thenReturn(status);
+        when(mockResponse.headers()).thenReturn(responseHeaders);
+        when(mockResponse.bodyToMono(String.class)).thenReturn(Mono.just(body));
+    }
+
     @Test
     @DisplayName("Should map 400 Bad Request to ServiceValidationException")
     void shouldMap400ToServiceValidationException() {
         // Given
-        when(mockResponse.statusCode()).thenReturn(HttpStatus.BAD_REQUEST);
-        when(mockResponse.headers()).thenReturn(mock(ClientResponse.Headers.class));
-        when(mockResponse.bodyToMono(String.class)).thenReturn(Mono.just("{\"error\":\"Invalid input\"}"));
+        setupMockResponse(HttpStatus.BAD_REQUEST, "{\"error\":\"Invalid input\"}");
 
         // When
-        Mono<Throwable> result = HttpErrorMapper.mapHttpError(
+        Mono<? extends Throwable> result = HttpErrorMapper.mapHttpError(
             mockResponse, serviceName, endpoint, method, requestId, startTime
         );
 
@@ -66,12 +77,10 @@ class HttpErrorMapperTest {
     @DisplayName("Should map 401 Unauthorized to ServiceAuthenticationException")
     void shouldMap401ToServiceAuthenticationException() {
         // Given
-        when(mockResponse.statusCode()).thenReturn(HttpStatus.UNAUTHORIZED);
-        when(mockResponse.headers()).thenReturn(mock(ClientResponse.Headers.class));
-        when(mockResponse.bodyToMono(String.class)).thenReturn(Mono.just("{\"error\":\"Unauthorized\"}"));
+        setupMockResponse(HttpStatus.UNAUTHORIZED, "{\"error\":\"Unauthorized\"}");
 
         // When
-        Mono<Throwable> result = HttpErrorMapper.mapHttpError(
+        Mono<? extends Throwable> result = HttpErrorMapper.mapHttpError(
             mockResponse, serviceName, endpoint, method, requestId, startTime
         );
 
@@ -88,12 +97,10 @@ class HttpErrorMapperTest {
     @DisplayName("Should map 403 Forbidden to ServiceAuthenticationException")
     void shouldMap403ToServiceAuthenticationException() {
         // Given
-        when(mockResponse.statusCode()).thenReturn(HttpStatus.FORBIDDEN);
-        when(mockResponse.headers()).thenReturn(mock(ClientResponse.Headers.class));
-        when(mockResponse.bodyToMono(String.class)).thenReturn(Mono.just("{\"error\":\"Forbidden\"}"));
+        setupMockResponse(HttpStatus.FORBIDDEN, "{\"error\":\"Forbidden\"}");
 
         // When
-        Mono<Throwable> result = HttpErrorMapper.mapHttpError(
+        Mono<? extends Throwable> result = HttpErrorMapper.mapHttpError(
             mockResponse, serviceName, endpoint, method, requestId, startTime
         );
 
@@ -110,12 +117,10 @@ class HttpErrorMapperTest {
     @DisplayName("Should map 404 Not Found to ServiceNotFoundException")
     void shouldMap404ToServiceNotFoundException() {
         // Given
-        when(mockResponse.statusCode()).thenReturn(HttpStatus.NOT_FOUND);
-        when(mockResponse.headers()).thenReturn(mock(ClientResponse.Headers.class));
-        when(mockResponse.bodyToMono(String.class)).thenReturn(Mono.just("{\"error\":\"Not found\"}"));
+        setupMockResponse(HttpStatus.NOT_FOUND, "{\"error\":\"Not found\"}");
 
         // When
-        Mono<Throwable> result = HttpErrorMapper.mapHttpError(
+        Mono<? extends Throwable> result = HttpErrorMapper.mapHttpError(
             mockResponse, serviceName, endpoint, method, requestId, startTime
         );
 
@@ -132,12 +137,10 @@ class HttpErrorMapperTest {
     @DisplayName("Should map 408 Request Timeout to ServiceTimeoutException")
     void shouldMap408ToServiceTimeoutException() {
         // Given
-        when(mockResponse.statusCode()).thenReturn(HttpStatus.REQUEST_TIMEOUT);
-        when(mockResponse.headers()).thenReturn(mock(ClientResponse.Headers.class));
-        when(mockResponse.bodyToMono(String.class)).thenReturn(Mono.just("{\"error\":\"Timeout\"}"));
+        setupMockResponse(HttpStatus.REQUEST_TIMEOUT, "{\"error\":\"Timeout\"}");
 
         // When
-        Mono<Throwable> result = HttpErrorMapper.mapHttpError(
+        Mono<? extends Throwable> result = HttpErrorMapper.mapHttpError(
             mockResponse, serviceName, endpoint, method, requestId, startTime
         );
 
@@ -154,12 +157,10 @@ class HttpErrorMapperTest {
     @DisplayName("Should map 409 Conflict to ServiceConflictException")
     void shouldMap409ToServiceConflictException() {
         // Given
-        when(mockResponse.statusCode()).thenReturn(HttpStatus.CONFLICT);
-        when(mockResponse.headers()).thenReturn(mock(ClientResponse.Headers.class));
-        when(mockResponse.bodyToMono(String.class)).thenReturn(Mono.just("{\"error\":\"Conflict\"}"));
+        setupMockResponse(HttpStatus.CONFLICT, "{\"error\":\"Conflict\"}");
 
         // When
-        Mono<Throwable> result = HttpErrorMapper.mapHttpError(
+        Mono<? extends Throwable> result = HttpErrorMapper.mapHttpError(
             mockResponse, serviceName, endpoint, method, requestId, startTime
         );
 
@@ -176,12 +177,10 @@ class HttpErrorMapperTest {
     @DisplayName("Should map 422 Unprocessable Entity to ServiceUnprocessableEntityException")
     void shouldMap422ToServiceUnprocessableEntityException() {
         // Given
-        when(mockResponse.statusCode()).thenReturn(HttpStatus.UNPROCESSABLE_ENTITY);
-        when(mockResponse.headers()).thenReturn(mock(ClientResponse.Headers.class));
-        when(mockResponse.bodyToMono(String.class)).thenReturn(Mono.just("{\"error\":\"Validation failed\"}"));
+        setupMockResponse(HttpStatus.UNPROCESSABLE_ENTITY, "{\"error\":\"Validation failed\"}");
 
         // When
-        Mono<Throwable> result = HttpErrorMapper.mapHttpError(
+        Mono<? extends Throwable> result = HttpErrorMapper.mapHttpError(
             mockResponse, serviceName, endpoint, method, requestId, startTime
         );
 
@@ -208,7 +207,7 @@ class HttpErrorMapperTest {
         when(mockResponse.bodyToMono(String.class)).thenReturn(Mono.just("{\"error\":\"Rate limited\"}"));
 
         // When
-        Mono<Throwable> result = HttpErrorMapper.mapHttpError(
+        Mono<? extends Throwable> result = HttpErrorMapper.mapHttpError(
             mockResponse, serviceName, endpoint, method, requestId, startTime
         );
 
@@ -227,12 +226,10 @@ class HttpErrorMapperTest {
     @DisplayName("Should map 500 Internal Server Error to ServiceInternalErrorException")
     void shouldMap500ToServiceInternalErrorException() {
         // Given
-        when(mockResponse.statusCode()).thenReturn(HttpStatus.INTERNAL_SERVER_ERROR);
-        when(mockResponse.headers()).thenReturn(mock(ClientResponse.Headers.class));
-        when(mockResponse.bodyToMono(String.class)).thenReturn(Mono.just("{\"error\":\"Internal error\"}"));
+        setupMockResponse(HttpStatus.INTERNAL_SERVER_ERROR, "{\"error\":\"Internal error\"}");
 
         // When
-        Mono<Throwable> result = HttpErrorMapper.mapHttpError(
+        Mono<? extends Throwable> result = HttpErrorMapper.mapHttpError(
             mockResponse, serviceName, endpoint, method, requestId, startTime
         );
 
@@ -249,12 +246,10 @@ class HttpErrorMapperTest {
     @DisplayName("Should map 502 Bad Gateway to ServiceTemporarilyUnavailableException")
     void shouldMap502ToServiceTemporarilyUnavailableException() {
         // Given
-        when(mockResponse.statusCode()).thenReturn(HttpStatus.BAD_GATEWAY);
-        when(mockResponse.headers()).thenReturn(mock(ClientResponse.Headers.class));
-        when(mockResponse.bodyToMono(String.class)).thenReturn(Mono.just("{\"error\":\"Bad gateway\"}"));
+        setupMockResponse(HttpStatus.BAD_GATEWAY, "{\"error\":\"Bad gateway\"}");
 
         // When
-        Mono<Throwable> result = HttpErrorMapper.mapHttpError(
+        Mono<? extends Throwable> result = HttpErrorMapper.mapHttpError(
             mockResponse, serviceName, endpoint, method, requestId, startTime
         );
 
@@ -271,12 +266,10 @@ class HttpErrorMapperTest {
     @DisplayName("Should map 503 Service Unavailable to ServiceTemporarilyUnavailableException")
     void shouldMap503ToServiceTemporarilyUnavailableException() {
         // Given
-        when(mockResponse.statusCode()).thenReturn(HttpStatus.SERVICE_UNAVAILABLE);
-        when(mockResponse.headers()).thenReturn(mock(ClientResponse.Headers.class));
-        when(mockResponse.bodyToMono(String.class)).thenReturn(Mono.just("{\"error\":\"Service unavailable\"}"));
+        setupMockResponse(HttpStatus.SERVICE_UNAVAILABLE, "{\"error\":\"Service unavailable\"}");
 
         // When
-        Mono<Throwable> result = HttpErrorMapper.mapHttpError(
+        Mono<? extends Throwable> result = HttpErrorMapper.mapHttpError(
             mockResponse, serviceName, endpoint, method, requestId, startTime
         );
 
@@ -292,12 +285,10 @@ class HttpErrorMapperTest {
     @DisplayName("Should map 504 Gateway Timeout to ServiceTemporarilyUnavailableException")
     void shouldMap504ToServiceTemporarilyUnavailableException() {
         // Given
-        when(mockResponse.statusCode()).thenReturn(HttpStatus.GATEWAY_TIMEOUT);
-        when(mockResponse.headers()).thenReturn(mock(ClientResponse.Headers.class));
-        when(mockResponse.bodyToMono(String.class)).thenReturn(Mono.just("{\"error\":\"Gateway timeout\"}"));
+        setupMockResponse(HttpStatus.GATEWAY_TIMEOUT, "{\"error\":\"Gateway timeout\"}");
 
         // When
-        Mono<Throwable> result = HttpErrorMapper.mapHttpError(
+        Mono<? extends Throwable> result = HttpErrorMapper.mapHttpError(
             mockResponse, serviceName, endpoint, method, requestId, startTime
         );
 
@@ -313,12 +304,10 @@ class HttpErrorMapperTest {
     @DisplayName("Should include error context in mapped exceptions")
     void shouldIncludeErrorContextInMappedExceptions() {
         // Given
-        when(mockResponse.statusCode()).thenReturn(HttpStatus.NOT_FOUND);
-        when(mockResponse.headers()).thenReturn(mock(ClientResponse.Headers.class));
-        when(mockResponse.bodyToMono(String.class)).thenReturn(Mono.just("{\"error\":\"Not found\"}"));
+        setupMockResponse(HttpStatus.NOT_FOUND, "{\"error\":\"Not found\"}");
 
         // When
-        Mono<Throwable> result = HttpErrorMapper.mapHttpError(
+        Mono<? extends Throwable> result = HttpErrorMapper.mapHttpError(
             mockResponse, serviceName, endpoint, method, requestId, startTime
         );
 
@@ -327,7 +316,7 @@ class HttpErrorMapperTest {
             .assertNext(throwable -> {
                 ServiceClientException exception = (ServiceClientException) throwable;
                 ErrorContext context = exception.getErrorContext();
-                
+
                 assertThat(context.getServiceName()).isEqualTo(serviceName);
                 assertThat(context.getEndpoint()).isEqualTo(endpoint);
                 assertThat(context.getMethod()).isEqualTo(method);

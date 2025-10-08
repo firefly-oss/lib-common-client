@@ -66,7 +66,7 @@ class GrpcServiceClientImplTest {
     @Test
     void testBasicProperties() {
         assertThat(grpcClient.getServiceName()).isEqualTo("test-grpc-service");
-        assertThat(grpcClient.getBaseUrl()).isEqualTo("localhost:9090");
+        assertThat(grpcClient.getAddress()).isEqualTo("localhost:9090");
         assertThat(grpcClient.getClientType()).isEqualTo(ClientType.GRPC);
         assertThat(grpcClient.isReady()).isTrue();
         assertThat(grpcClient.getStub()).isEqualTo(mockStub);
@@ -180,36 +180,16 @@ class GrpcServiceClientImplTest {
             freshCircuitBreakerManager
         );
 
-        // Verify that HTTP operations are mapped to gRPC method calls
-        // Since the test stub doesn't have the expected methods, we expect meaningful error messages
+        // Verify that the gRPC client provides native gRPC API
+        // Test unary operation with circuit breaker
+        StepVerifier.create(freshClient.unary(stub -> "test-response"))
+            .expectNext("test-response")
+            .verifyComplete();
 
-        StepVerifier.create(freshClient.get("/test", String.class).execute())
-            .expectErrorMatches(throwable ->
-                throwable instanceof RuntimeException &&
-                throwable.getMessage().contains("No gRPC method found") &&
-                throwable.getMessage().contains("getTest"))
-            .verify();
-
-        StepVerifier.create(freshClient.post("/users", String.class).execute())
-            .expectErrorMatches(throwable ->
-                throwable instanceof RuntimeException &&
-                throwable.getMessage().contains("No gRPC method found") &&
-                throwable.getMessage().contains("createUsers"))
-            .verify();
-
-        StepVerifier.create(freshClient.put("/users/123", String.class).execute())
-            .expectErrorMatches(throwable ->
-                throwable instanceof RuntimeException &&
-                throwable.getMessage().contains("No gRPC method found") &&
-                throwable.getMessage().contains("updateUsers"))
-            .verify();
-
-        StepVerifier.create(freshClient.delete("/users/123", String.class).execute())
-            .expectErrorMatches(throwable ->
-                throwable instanceof RuntimeException &&
-                throwable.getMessage().contains("No gRPC method found") &&
-                throwable.getMessage().contains("deleteUsers"))
-            .verify();
+        // Verify stub access
+        assertThat(freshClient.getStub()).isNotNull();
+        assertThat(freshClient.getAddress()).isEqualTo("localhost:9090");
+        assertThat(freshClient.getChannel()).isNotNull();
     }
 
     @Test

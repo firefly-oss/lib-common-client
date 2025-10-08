@@ -1,5 +1,6 @@
 package com.firefly.common.client.exception;
 
+import com.firefly.common.client.ClientType;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import org.junit.jupiter.api.BeforeEach;
@@ -294,13 +295,13 @@ class GrpcErrorMapperTest {
         // Then
         ServiceClientException exception = (ServiceClientException) result;
         ErrorContext context = exception.getErrorContext();
-        
+
         assertThat(context.getServiceName()).isEqualTo(serviceName);
-        assertThat(context.getEndpoint()).isEqualTo(operation);
+        assertThat(context.getMethod()).isEqualTo(operation);
         assertThat(context.getRequestId()).isEqualTo(requestId);
         assertThat(context.getGrpcStatusCode()).isEqualTo("NOT_FOUND");
         assertThat(context.hasElapsedTime()).isTrue();
-        assertThat(context.getClientType()).isEqualTo("gRPC");
+        assertThat(context.getClientType()).isEqualTo(ClientType.GRPC);
     }
 
     @Test

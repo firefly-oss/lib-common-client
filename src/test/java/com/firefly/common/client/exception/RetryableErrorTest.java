@@ -46,7 +46,7 @@ class RetryableErrorTest {
             .build();
 
         // When
-        ServiceRateLimitException exception = new ServiceRateLimitException("Rate limited", context, 120);
+        ServiceRateLimitException exception = new ServiceRateLimitException("Rate limited", Integer.valueOf(120), context);
 
         // Then
         assertThat(exception.isRetryable()).isTrue();
@@ -94,7 +94,7 @@ class RetryableErrorTest {
     @DisplayName("CircuitBreakerOpenException should be retryable with 5 second delay")
     void circuitBreakerOpenExceptionShouldBeRetryable() {
         // When
-        CircuitBreakerOpenException exception = new CircuitBreakerOpenException("Circuit open", "test-service");
+        CircuitBreakerOpenException exception = new CircuitBreakerOpenException("Circuit open");
 
         // Then
         assertThat(exception).isInstanceOf(RetryableError.class);
@@ -106,7 +106,7 @@ class RetryableErrorTest {
     @DisplayName("CircuitBreakerTimeoutException should be retryable with 2 second delay")
     void circuitBreakerTimeoutExceptionShouldBeRetryable() {
         // When
-        CircuitBreakerTimeoutException exception = new CircuitBreakerTimeoutException("Circuit timeout", "test-service");
+        CircuitBreakerTimeoutException exception = new CircuitBreakerTimeoutException("Circuit timeout");
 
         // Then
         assertThat(exception).isInstanceOf(RetryableError.class);
@@ -118,7 +118,7 @@ class RetryableErrorTest {
     @DisplayName("LoadSheddingException should be retryable with 3 second delay")
     void loadSheddingExceptionShouldBeRetryable() {
         // When
-        LoadSheddingException exception = new LoadSheddingException("Load shedding active", "test-service");
+        LoadSheddingException exception = new LoadSheddingException("Load shedding active");
 
         // Then
         assertThat(exception).isInstanceOf(RetryableError.class);
@@ -130,7 +130,7 @@ class RetryableErrorTest {
     @DisplayName("RateLimitExceededException should be retryable with 1 second delay")
     void rateLimitExceededExceptionShouldBeRetryable() {
         // When
-        RateLimitExceededException exception = new RateLimitExceededException("Rate limit exceeded", "test-service");
+        RateLimitExceededException exception = new RateLimitExceededException("Rate limit exceeded");
 
         // Then
         assertThat(exception).isInstanceOf(RetryableError.class);
@@ -142,7 +142,7 @@ class RetryableErrorTest {
     @DisplayName("BulkheadFullException should be retryable with 500ms delay")
     void bulkheadFullExceptionShouldBeRetryable() {
         // When
-        BulkheadFullException exception = new BulkheadFullException("Bulkhead full", "test-service");
+        BulkheadFullException exception = new BulkheadFullException("Bulkhead full");
 
         // Then
         assertThat(exception).isInstanceOf(RetryableError.class);
@@ -207,7 +207,7 @@ class RetryableErrorTest {
         ServiceTimeoutException timeout = new ServiceTimeoutException("Timeout");
         ServiceRateLimitException rateLimit = new ServiceRateLimitException("Rate limited");
         ServiceConnectionException connection = new ServiceConnectionException("Connection failed");
-        BulkheadFullException bulkhead = new BulkheadFullException("Bulkhead full", "test");
+        BulkheadFullException bulkhead = new BulkheadFullException("Bulkhead full");
 
         // Then
         assertThat(timeout.getRetryDelay()).isEqualTo(Duration.ofSeconds(2));

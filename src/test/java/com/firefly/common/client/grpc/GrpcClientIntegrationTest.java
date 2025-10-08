@@ -17,20 +17,17 @@
 package com.firefly.common.client.grpc;
 
 import com.firefly.common.client.ServiceClient;
+import com.firefly.common.client.impl.GrpcServiceClientImpl;
 import io.grpc.*;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
-import io.grpc.testing.GrpcCleanupRule;
 import org.junit.jupiter.api.*;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -102,16 +99,16 @@ class GrpcClientIntegrationTest {
     @DisplayName("Should perform unary RPC call successfully")
     void shouldPerformUnaryRpcCallSuccessfully() {
         // Given: A gRPC client
-        ServiceClient client = ServiceClient.grpc("test-service", TestServiceGrpc.TestServiceBlockingStub.class)
-            .address(SERVER_NAME)
-            .usePlaintext()
-            .stubFactory(ch -> TestServiceGrpc.newBlockingStub(channel))
-            .build();
+        GrpcServiceClientImpl<TestServiceGrpc.TestServiceBlockingStub> client =
+            (GrpcServiceClientImpl<TestServiceGrpc.TestServiceBlockingStub>) ServiceClient.grpc("test-service", TestServiceGrpc.TestServiceBlockingStub.class)
+                .address(SERVER_NAME)
+                .usePlaintext()
+                .stubFactory(ch -> TestServiceGrpc.newBlockingStub(channel))
+                .build();
 
         // When: Performing a unary call
-        TestServiceGrpc.TestServiceBlockingStub stub = 
-            (TestServiceGrpc.TestServiceBlockingStub) client.getStub();
-        
+        TestServiceGrpc.TestServiceBlockingStub stub = client.getStub();
+
         TestRequest request = TestRequest.newBuilder()
             .setMessage("Hello gRPC")
             .build();
@@ -129,16 +126,16 @@ class GrpcClientIntegrationTest {
     @DisplayName("Should handle gRPC error correctly")
     void shouldHandleGrpcErrorCorrectly() {
         // Given: A gRPC client
-        ServiceClient client = ServiceClient.grpc("test-service", TestServiceGrpc.TestServiceBlockingStub.class)
-            .address(SERVER_NAME)
-            .usePlaintext()
-            .stubFactory(ch -> TestServiceGrpc.newBlockingStub(channel))
-            .build();
+        GrpcServiceClientImpl<TestServiceGrpc.TestServiceBlockingStub> client =
+            (GrpcServiceClientImpl<TestServiceGrpc.TestServiceBlockingStub>) ServiceClient.grpc("test-service", TestServiceGrpc.TestServiceBlockingStub.class)
+                .address(SERVER_NAME)
+                .usePlaintext()
+                .stubFactory(ch -> TestServiceGrpc.newBlockingStub(channel))
+                .build();
 
         // When: Performing a call that triggers an error
-        TestServiceGrpc.TestServiceBlockingStub stub = 
-            (TestServiceGrpc.TestServiceBlockingStub) client.getStub();
-        
+        TestServiceGrpc.TestServiceBlockingStub stub = client.getStub();
+
         TestRequest request = TestRequest.newBuilder()
             .setMessage("ERROR")
             .build();
@@ -159,22 +156,22 @@ class GrpcClientIntegrationTest {
     @DisplayName("Should handle metadata correctly")
     void shouldHandleMetadataCorrectly() {
         // Given: A gRPC client with metadata
-        ServiceClient client = ServiceClient.grpc("test-service", TestServiceGrpc.TestServiceBlockingStub.class)
-            .address(SERVER_NAME)
-            .usePlaintext()
-            .stubFactory(ch -> TestServiceGrpc.newBlockingStub(channel))
-            .build();
+        GrpcServiceClientImpl<TestServiceGrpc.TestServiceBlockingStub> client =
+            (GrpcServiceClientImpl<TestServiceGrpc.TestServiceBlockingStub>) ServiceClient.grpc("test-service", TestServiceGrpc.TestServiceBlockingStub.class)
+                .address(SERVER_NAME)
+                .usePlaintext()
+                .stubFactory(ch -> TestServiceGrpc.newBlockingStub(channel))
+                .build();
 
         // When: Performing a call with metadata
         Metadata metadata = new Metadata();
         Metadata.Key<String> key = Metadata.Key.of("custom-header", Metadata.ASCII_STRING_MARSHALLER);
         metadata.put(key, "custom-value");
 
-        TestServiceGrpc.TestServiceBlockingStub stub = 
-            (TestServiceGrpc.TestServiceBlockingStub) client.getStub();
-        
-        TestServiceGrpc.TestServiceBlockingStub stubWithMetadata = 
-            MetadataUtils.attachHeaders(stub, metadata);
+        TestServiceGrpc.TestServiceBlockingStub stub = client.getStub();
+
+        TestServiceGrpc.TestServiceBlockingStub stubWithMetadata =
+            stub.withInterceptors(io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(metadata));
 
         TestRequest request = TestRequest.newBuilder()
             .setMessage("Hello with metadata")
@@ -213,18 +210,18 @@ class GrpcClientIntegrationTest {
     @DisplayName("Should handle timeout correctly")
     void shouldHandleTimeoutCorrectly() {
         // Given: A gRPC client with short timeout
-        ServiceClient client = ServiceClient.grpc("test-service", TestServiceGrpc.TestServiceBlockingStub.class)
-            .address(SERVER_NAME)
-            .usePlaintext()
-            .timeout(Duration.ofMillis(100))
-            .stubFactory(ch -> TestServiceGrpc.newBlockingStub(channel)
-                .withDeadlineAfter(100, TimeUnit.MILLISECONDS))
-            .build();
+        GrpcServiceClientImpl<TestServiceGrpc.TestServiceBlockingStub> client =
+            (GrpcServiceClientImpl<TestServiceGrpc.TestServiceBlockingStub>) ServiceClient.grpc("test-service", TestServiceGrpc.TestServiceBlockingStub.class)
+                .address(SERVER_NAME)
+                .usePlaintext()
+                .timeout(Duration.ofMillis(100))
+                .stubFactory(ch -> TestServiceGrpc.newBlockingStub(channel)
+                    .withDeadlineAfter(100, TimeUnit.MILLISECONDS))
+                .build();
 
         // When: Performing a call that takes too long
-        TestServiceGrpc.TestServiceBlockingStub stub = 
-            (TestServiceGrpc.TestServiceBlockingStub) client.getStub();
-        
+        TestServiceGrpc.TestServiceBlockingStub stub = client.getStub();
+
         TestRequest request = TestRequest.newBuilder()
             .setMessage("SLOW")
             .build();

@@ -108,7 +108,7 @@ class ErrorResponseParserTest {
         String message = ErrorResponseParser.parseErrorMessage("");
 
         // Then
-        assertThat(message).isEmpty();
+        assertThat(message).isNull();
     }
 
     @Test
@@ -262,13 +262,13 @@ class ErrorResponseParserTest {
     }
 
     @Test
-    @DisplayName("Should prioritize error field over message field")
-    void shouldPrioritizeErrorFieldOverMessageField() {
+    @DisplayName("Should prioritize message field over error field")
+    void shouldPrioritizeMessageFieldOverErrorField() {
         // Given
         String json = """
             {
-                "error": "Primary error",
-                "message": "Secondary message"
+                "error": "Secondary error",
+                "message": "Primary message"
             }
             """;
 
@@ -276,7 +276,7 @@ class ErrorResponseParserTest {
         String message = ErrorResponseParser.parseErrorMessage(json);
 
         // Then
-        assertThat(message).isEqualTo("Primary error");
+        assertThat(message).isEqualTo("Primary message");
     }
 
     @Test

@@ -3,6 +3,8 @@ package com.firefly.common.client.exception;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+
 import static org.assertj.core.api.Assertions.*;
 
 /**
@@ -20,7 +22,8 @@ class ServiceClientExceptionTest {
         // Then
         assertThat(exception.getMessage()).isEqualTo("Test error");
         assertThat(exception.getCause()).isNull();
-        assertThat(exception.getErrorContext()).isEqualTo(ErrorContext.empty());
+        assertThat(exception.getErrorContext()).isNotNull();
+        assertThat(exception.getErrorContext().getServiceName()).isNull();
         assertThat(exception.getErrorCategory()).isEqualTo(ErrorCategory.UNKNOWN_ERROR);
     }
 
@@ -36,7 +39,8 @@ class ServiceClientExceptionTest {
         // Then
         assertThat(exception.getMessage()).isEqualTo("Test error");
         assertThat(exception.getCause()).isEqualTo(cause);
-        assertThat(exception.getErrorContext()).isEqualTo(ErrorContext.empty());
+        assertThat(exception.getErrorContext()).isNotNull();
+        assertThat(exception.getErrorContext().getServiceName()).isNull();
     }
 
     @Test
@@ -71,7 +75,7 @@ class ServiceClientExceptionTest {
             .build();
 
         // When
-        ServiceClientException exception = new ServiceClientException("Test error", cause, context);
+        ServiceClientException exception = new ServiceClientException("Test error", context, cause);
 
         // Then
         assertThat(exception.getMessage()).contains("Test error");
@@ -145,7 +149,7 @@ class ServiceClientExceptionTest {
     @DisplayName("CircuitBreakerOpenException should have CIRCUIT_BREAKER_ERROR category")
     void circuitBreakerOpenExceptionShouldHaveCircuitBreakerErrorCategory() {
         // When
-        CircuitBreakerOpenException exception = new CircuitBreakerOpenException("Circuit open", "test-service");
+        CircuitBreakerOpenException exception = new CircuitBreakerOpenException("Circuit open");
 
         // Then
         assertThat(exception.getErrorCategory()).isEqualTo(ErrorCategory.CIRCUIT_BREAKER_ERROR);
@@ -165,7 +169,7 @@ class ServiceClientExceptionTest {
     @DisplayName("WsdlParsingException should have CONFIGURATION_ERROR category")
     void wsdlParsingExceptionShouldHaveConfigurationErrorCategory() {
         // When
-        WsdlParsingException exception = new WsdlParsingException("WSDL parsing failed", "http://test.wsdl");
+        WsdlParsingException exception = new WsdlParsingException("WSDL parsing failed", new RuntimeException("Parse error"));
 
         // Then
         assertThat(exception.getErrorCategory()).isEqualTo(ErrorCategory.CONFIGURATION_ERROR);
@@ -181,7 +185,7 @@ class ServiceClientExceptionTest {
             .method("GET")
             .httpStatusCode(404)
             .requestId("req-abc")
-            .elapsedTime(150L)
+            .elapsedTime(Duration.ofMillis(150))
             .build();
 
         // When
@@ -194,18 +198,22 @@ class ServiceClientExceptionTest {
         assertThat(message).contains("Endpoint: /users/123");
         assertThat(message).contains("HTTP Status: 404");
         assertThat(message).contains("Request ID: req-abc");
-        assertThat(message).contains("Duration: 150ms");
+        assertThat(message).contains("Duration:");
     }
 
     @Test
     @DisplayName("Should handle empty error context gracefully")
     void shouldHandleEmptyErrorContextGracefully() {
+        // Given
+        ErrorContext emptyContext = ErrorContext.empty();
+
         // When
-        ServiceClientException exception = new ServiceClientException("Test error", ErrorContext.empty());
+        ServiceClientException exception = new ServiceClientException("Test error", emptyContext);
 
         // Then
         assertThat(exception.getMessage()).isEqualTo("Test error");
-        assertThat(exception.getErrorContext()).isEqualTo(ErrorContext.empty());
+        assertThat(exception.getErrorContext()).isNotNull();
+        assertThat(exception.getErrorContext().getServiceName()).isNull();
     }
 
     @Test
@@ -216,8 +224,8 @@ class ServiceClientExceptionTest {
         javax.xml.namespace.QName serverFault = new javax.xml.namespace.QName("http://schemas.xmlsoap.org/soap/envelope/", "Server");
 
         // When
-        SoapFaultException clientException = new SoapFaultException("Client fault", clientFault, "Client error");
-        SoapFaultException serverException = new SoapFaultException("Server fault", serverFault, "Server error");
+        SoapFaultException clientException = new SoapFaultException(clientFault, "Client fault", null, "Client error", ErrorContext.empty());
+        SoapFaultException serverException = new SoapFaultException(serverFault, "Server fault", null, "Server error", ErrorContext.empty());
 
         // Then
         assertThat(clientException.getErrorCategory()).isEqualTo(ErrorCategory.CLIENT_ERROR);

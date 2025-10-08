@@ -294,9 +294,9 @@ class ErrorHandlingIntegrationTest {
             .expectErrorSatisfies(throwable -> {
                 ServiceClientException exception = (ServiceClientException) throwable;
                 ErrorContext context = exception.getErrorContext();
-                
+
                 assertThat(context.hasElapsedTime()).isTrue();
-                assertThat(context.getElapsedTime()).isGreaterThanOrEqualTo(100L);
+                assertThat(context.getElapsedTime()).isGreaterThanOrEqualTo(Duration.ofMillis(100));
                 assertThat(exception.getMessage()).contains("Duration:");
             })
             .verify();

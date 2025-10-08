@@ -54,14 +54,14 @@ public final class TestServiceGrpc {
     public static abstract class TestServiceImplBase implements BindableService {
         public void unaryCall(GrpcClientIntegrationTest.TestRequest request,
                             StreamObserver<GrpcClientIntegrationTest.TestResponse> responseObserver) {
-            asyncUnimplementedUnaryCall(METHOD_UNARY_CALL, responseObserver);
+            io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(METHOD_UNARY_CALL, responseObserver);
         }
 
         @Override
         public ServerServiceDefinition bindService() {
             return ServerServiceDefinition.builder(SERVICE_NAME)
                 .addMethod(METHOD_UNARY_CALL,
-                    asyncUnaryCall(
+                    io.grpc.stub.ServerCalls.asyncUnaryCall(
                         new MethodHandlers<>(this, 0)))
                 .build();
         }
@@ -82,7 +82,7 @@ public final class TestServiceGrpc {
         }
 
         public GrpcClientIntegrationTest.TestResponse unaryCall(GrpcClientIntegrationTest.TestRequest request) {
-            return blockingUnaryCall(
+            return io.grpc.stub.ClientCalls.blockingUnaryCall(
                 getChannel(), METHOD_UNARY_CALL, getCallOptions(), request);
         }
     }
@@ -103,7 +103,7 @@ public final class TestServiceGrpc {
 
         public void unaryCall(GrpcClientIntegrationTest.TestRequest request,
                             StreamObserver<GrpcClientIntegrationTest.TestResponse> responseObserver) {
-            asyncUnaryCall(
+            io.grpc.stub.ClientCalls.asyncUnaryCall(
                 getChannel().newCall(METHOD_UNARY_CALL, getCallOptions()), request, responseObserver);
         }
     }

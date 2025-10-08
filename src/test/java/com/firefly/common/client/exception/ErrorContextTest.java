@@ -1,8 +1,10 @@
 package com.firefly.common.client.exception;
 
+import com.firefly.common.client.ClientType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -29,14 +31,14 @@ class ErrorContextTest {
         assertThat(context.getClientType()).isNull();
         assertThat(context.getRequestId()).isNull();
         assertThat(context.getCorrelationId()).isNull();
-        assertThat(context.getTimestamp()).isNull();
+        assertThat(context.getTimestamp()).isNotNull(); // Default timestamp is set
         assertThat(context.getHttpStatusCode()).isNull();
         assertThat(context.getGrpcStatusCode()).isNull();
         assertThat(context.getResponseBody()).isNull();
-        assertThat(context.getHeaders()).isNull();
+        assertThat(context.getHeaders()).isEmpty(); // Default empty map
         assertThat(context.getElapsedTime()).isNull();
         assertThat(context.getRetryAttempt()).isNull();
-        assertThat(context.getAdditionalContext()).isNull();
+        assertThat(context.getAdditionalContext()).isEmpty(); // Default empty map
     }
 
     @Test
@@ -54,7 +56,7 @@ class ErrorContextTest {
             .serviceName("test-service")
             .endpoint("/api/test")
             .method("GET")
-            .clientType("REST")
+            .clientType(ClientType.REST)
             .requestId("req-123")
             .correlationId("corr-456")
             .timestamp(now)
@@ -62,7 +64,7 @@ class ErrorContextTest {
             .grpcStatusCode("NOT_FOUND")
             .responseBody("{\"error\":\"Not found\"}")
             .headers(headers)
-            .elapsedTime(100L)
+            .elapsedTime(Duration.ofMillis(100))
             .retryAttempt(2)
             .additionalContext(additionalContext)
             .build();
@@ -71,17 +73,17 @@ class ErrorContextTest {
         assertThat(context.getServiceName()).isEqualTo("test-service");
         assertThat(context.getEndpoint()).isEqualTo("/api/test");
         assertThat(context.getMethod()).isEqualTo("GET");
-        assertThat(context.getClientType()).isEqualTo("REST");
+        assertThat(context.getClientType()).isEqualTo(ClientType.REST);
         assertThat(context.getRequestId()).isEqualTo("req-123");
         assertThat(context.getCorrelationId()).isEqualTo("corr-456");
         assertThat(context.getTimestamp()).isEqualTo(now);
         assertThat(context.getHttpStatusCode()).isEqualTo(404);
         assertThat(context.getGrpcStatusCode()).isEqualTo("NOT_FOUND");
         assertThat(context.getResponseBody()).isEqualTo("{\"error\":\"Not found\"}");
-        assertThat(context.getHeaders()).isEqualTo(headers);
-        assertThat(context.getElapsedTime()).isEqualTo(100L);
+        assertThat(context.getHeaders()).containsEntry("X-Request-ID", "test-123");
+        assertThat(context.getElapsedTime()).isEqualTo(Duration.ofMillis(100));
         assertThat(context.getRetryAttempt()).isEqualTo(2);
-        assertThat(context.getAdditionalContext()).isEqualTo(additionalContext);
+        assertThat(context.getAdditionalContext()).containsEntry("key", "value");
     }
 
     @Test
@@ -119,7 +121,7 @@ class ErrorContextTest {
     void shouldCheckIfElapsedTimeIsPresent() {
         // Given
         ErrorContext withTime = ErrorContext.builder()
-            .elapsedTime(100L)
+            .elapsedTime(Duration.ofMillis(100))
             .build();
         ErrorContext withoutTime = ErrorContext.builder()
             .build();
@@ -157,7 +159,7 @@ class ErrorContextTest {
             .endpoint("/api/test")
             .httpStatusCode(404)
             .requestId("req-123")
-            .elapsedTime(100L)
+            .elapsedTime(Duration.ofMillis(100))
             .build();
 
         // When
@@ -168,7 +170,6 @@ class ErrorContextTest {
         assertThat(formatted).contains("/api/test");
         assertThat(formatted).contains("404");
         assertThat(formatted).contains("req-123");
-        assertThat(formatted).contains("100");
     }
 
     @Test

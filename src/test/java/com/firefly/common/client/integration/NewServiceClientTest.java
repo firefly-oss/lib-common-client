@@ -18,6 +18,8 @@ package com.firefly.common.client.integration;
 
 import com.firefly.common.client.ClientType;
 import com.firefly.common.client.ServiceClient;
+import com.firefly.common.client.RestClient;
+import com.firefly.common.client.GrpcClient;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -40,7 +42,7 @@ class NewServiceClientTest {
     @DisplayName("Should create REST client with simplified builder API")
     void shouldCreateRestClientWithSimplifiedBuilder() {
         // Given: Simple REST client creation
-        ServiceClient client = ServiceClient.rest("customer-service")
+        RestClient client = ServiceClient.rest("customer-service")
             .baseUrl("http://customer-service:8080")
             .timeout(Duration.ofSeconds(30))
             .defaultHeader("Accept", "application/json")
@@ -58,13 +60,13 @@ class NewServiceClientTest {
     @DisplayName("Should demonstrate fluent request builder API for banking operations")
     void shouldDemonstrateFluentRequestBuilderApi() {
         // Given: A REST client for account service
-        ServiceClient accountClient = ServiceClient.rest("account-service")
+        RestClient accountClient = ServiceClient.rest("account-service")
             .baseUrl("http://account-service:8080")
             .jsonContentType()
             .build();
 
         // When: Building a request with fluent API
-        ServiceClient.RequestBuilder<Account> requestBuilder = accountClient.get("/accounts/{accountId}", Account.class)
+        RestClient.RequestBuilder<Account> requestBuilder = accountClient.get("/accounts/{accountId}", Account.class)
             .withPathParam("accountId", "ACC-123456")
             .withQueryParam("includeBalance", true)
             .withQueryParam("includeTransactions", false)
@@ -82,7 +84,7 @@ class NewServiceClientTest {
     @DisplayName("Should create gRPC client with simplified configuration")
     void shouldCreateGrpcClientWithSimplifiedConfiguration() {
         // Given: gRPC client creation (simplified)
-        ServiceClient grpcClient = ServiceClient.grpc("payment-service", PaymentServiceStub.class)
+        GrpcClient grpcClient = ServiceClient.grpc("payment-service", PaymentServiceStub.class)
             .address("payment-service:9090")
             .usePlaintext()
             .timeout(Duration.ofSeconds(30))
@@ -92,7 +94,7 @@ class NewServiceClientTest {
         // Then: Client should be properly configured
         assertThat(grpcClient).isNotNull();
         assertThat(grpcClient.getServiceName()).isEqualTo("payment-service");
-        assertThat(grpcClient.getBaseUrl()).isEqualTo("payment-service:9090"); // For gRPC, this returns address
+        assertThat(grpcClient.getAddress()).isEqualTo("payment-service:9090"); // For gRPC, this returns address
         assertThat(grpcClient.getClientType()).isEqualTo(ClientType.GRPC);
         assertThat(grpcClient.isReady()).isTrue();
     }

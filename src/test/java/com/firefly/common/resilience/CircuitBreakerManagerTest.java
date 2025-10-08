@@ -1,5 +1,7 @@
 package com.firefly.common.resilience;
 
+import com.firefly.common.client.exception.CircuitBreakerOpenException;
+import com.firefly.common.client.exception.CircuitBreakerTimeoutException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;

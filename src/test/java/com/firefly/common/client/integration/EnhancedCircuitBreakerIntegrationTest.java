@@ -1,9 +1,9 @@
 package com.firefly.common.client.integration;
 
 import com.firefly.common.client.ServiceClient;
+import com.firefly.common.client.exception.CircuitBreakerOpenException;
 import com.firefly.common.resilience.CircuitBreakerConfig;
 import com.firefly.common.resilience.CircuitBreakerManager;
-import com.firefly.common.resilience.CircuitBreakerOpenException;
 import com.firefly.common.resilience.CircuitBreakerState;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
