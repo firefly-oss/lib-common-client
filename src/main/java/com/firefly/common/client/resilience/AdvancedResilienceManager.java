@@ -16,6 +16,9 @@
 
 package com.firefly.common.client.resilience;
 
+import com.firefly.common.client.exception.BulkheadFullException;
+import com.firefly.common.client.exception.LoadSheddingException;
+import com.firefly.common.client.exception.RateLimitExceededException;
 import com.firefly.common.resilience.CircuitBreakerManager;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
@@ -30,7 +33,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -630,16 +632,4 @@ public class AdvancedResilienceManager {
         public Duration getMaxTimeout() { return maxTimeout; }
     }
 
-    // Exception classes
-    public static class LoadSheddingException extends RuntimeException {
-        public LoadSheddingException(String message) { super(message); }
-    }
-
-    public static class RateLimitExceededException extends RuntimeException {
-        public RateLimitExceededException(String message) { super(message); }
-    }
-
-    public static class BulkheadFullException extends RuntimeException {
-        public BulkheadFullException(String message) { super(message); }
-    }
 }

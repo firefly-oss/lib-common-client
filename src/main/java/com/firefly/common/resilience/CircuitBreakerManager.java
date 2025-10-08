@@ -16,6 +16,8 @@
 
 package com.firefly.common.resilience;
 
+import com.firefly.common.client.exception.CircuitBreakerOpenException;
+import com.firefly.common.client.exception.CircuitBreakerTimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 

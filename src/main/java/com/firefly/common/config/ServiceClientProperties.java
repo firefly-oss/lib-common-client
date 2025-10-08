@@ -67,6 +67,11 @@ public class ServiceClientProperties {
     private Grpc grpc = new Grpc();
 
     /**
+     * SOAP client configuration.
+     */
+    private Soap soap = new Soap();
+
+    /**
      * SDK client configuration.
      */
     private Sdk sdk = new Sdk();
@@ -286,7 +291,110 @@ public class ServiceClientProperties {
     }
 
     @Data
-    
+    public static class Soap {
+        /**
+         * Default timeout for SOAP operations.
+         */
+        private Duration defaultTimeout = Duration.ofSeconds(30);
+
+        /**
+         * Connection timeout for SOAP services.
+         */
+        private Duration connectionTimeout = Duration.ofSeconds(10);
+
+        /**
+         * Receive timeout for SOAP responses.
+         */
+        private Duration receiveTimeout = Duration.ofSeconds(30);
+
+        /**
+         * Whether to enable MTOM (Message Transmission Optimization Mechanism) by default.
+         */
+        private boolean mtomEnabled = false;
+
+        /**
+         * Whether to enable XML schema validation.
+         */
+        private boolean schemaValidationEnabled = true;
+
+        /**
+         * Whether to enable SOAP message logging.
+         */
+        private boolean messageLoggingEnabled = false;
+
+        /**
+         * Maximum size for SOAP messages in bytes.
+         */
+        private int maxMessageSize = 10 * 1024 * 1024; // 10MB
+
+        /**
+         * Whether to enable WS-Addressing.
+         */
+        private boolean wsAddressingEnabled = false;
+
+        /**
+         * Whether to enable WS-Security by default.
+         */
+        private boolean wsSecurityEnabled = false;
+
+        /**
+         * Default SOAP version (1.1 or 1.2).
+         */
+        private String soapVersion = "1.1";
+
+        /**
+         * Whether to cache WSDL definitions.
+         */
+        private boolean wsdlCacheEnabled = true;
+
+        /**
+         * WSDL cache expiration time.
+         */
+        private Duration wsdlCacheExpiration = Duration.ofHours(1);
+
+        /**
+         * Whether to follow HTTP redirects when fetching WSDL.
+         */
+        private boolean followRedirects = true;
+
+        /**
+         * Custom SOAP properties.
+         */
+        private Map<String, Object> properties = new HashMap<>();
+
+        /**
+         * Environment-specific settings.
+         */
+        public void applyEnvironmentDefaults(Environment environment) {
+            switch (environment) {
+                case DEVELOPMENT:
+                    if (this.defaultTimeout.equals(Duration.ofSeconds(30))) {
+                        this.defaultTimeout = Duration.ofSeconds(60);
+                    }
+                    this.messageLoggingEnabled = true;
+                    this.schemaValidationEnabled = true;
+                    break;
+                case TESTING:
+                    if (this.defaultTimeout.equals(Duration.ofSeconds(30))) {
+                        this.defaultTimeout = Duration.ofSeconds(30);
+                    }
+                    this.messageLoggingEnabled = true;
+                    this.schemaValidationEnabled = false; // Faster tests
+                    break;
+                case PRODUCTION:
+                    if (this.defaultTimeout.equals(Duration.ofSeconds(30))) {
+                        this.defaultTimeout = Duration.ofSeconds(30);
+                    }
+                    this.messageLoggingEnabled = false;
+                    this.schemaValidationEnabled = true;
+                    this.wsdlCacheEnabled = true;
+                    break;
+            }
+        }
+    }
+
+    @Data
+
     public static class Sdk {
         /**
          * Default timeout for SDK operations.
@@ -653,6 +761,7 @@ public class ServiceClientProperties {
     public void applyEnvironmentDefaults() {
         rest.applyEnvironmentDefaults(environment);
         grpc.applyEnvironmentDefaults(environment);
+        soap.applyEnvironmentDefaults(environment);
         sdk.applyEnvironmentDefaults(environment);
         circuitBreaker.applyEnvironmentDefaults(environment);
         retry.applyEnvironmentDefaults(environment);
