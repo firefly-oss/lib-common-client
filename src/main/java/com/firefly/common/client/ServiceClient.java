@@ -25,37 +25,43 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * Unified interface for service clients providing reactive communication patterns.
+ * Core interface for all service clients providing common lifecycle and health operations.
  *
- * <p>This redesigned interface provides a simplified, consistent API for all service communication
- * types (REST, gRPC) while maintaining protocol-specific optimizations under the hood.
- *
- * <p>Key improvements:
+ * <p>This interface defines the minimal contract that all service clients must implement,
+ * regardless of protocol (REST, gRPC, SOAP). Protocol-specific operations are defined in
+ * extending interfaces:
  * <ul>
- *   <li>Simplified method signatures with consistent parameter patterns</li>
- *   <li>Better type safety with improved generic handling</li>
- *   <li>Unified error handling across all implementations</li>
- *   <li>Built-in support for streaming operations</li>
- *   <li>Consistent request/response transformation</li>
- *   <li>Simplified configuration and builder patterns</li>
+ *   <li>{@link RestClient} - HTTP-based REST services</li>
+ *   <li>{@link GrpcClient} - gRPC services with Protocol Buffers</li>
+ *   <li>{@link SoapClient} - SOAP/WSDL services</li>
+ * </ul>
+ *
+ * <p>All service clients provide:
+ * <ul>
+ *   <li>Reactive, non-blocking operations with Mono/Flux</li>
+ *   <li>Built-in circuit breaker and resilience patterns</li>
+ *   <li>Health checks and readiness probes</li>
+ *   <li>Lifecycle management</li>
+ *   <li>Metrics and observability</li>
  * </ul>
  *
  * <p>Example usage:
  * <pre>{@code
- * // REST client - simplified creation
- * ServiceClient client = ServiceClient.rest("user-service")
- *     .baseUrl("http://user-service:8080")
+ * // REST client
+ * RestClient restClient = ServiceClient.rest("user-service")
+ *     .baseUrl("http://localhost:8080")
  *     .build();
  *
- * // Simple GET request
- * Mono<User> user = client.get("/users/{id}", User.class)
- *     .withPathParam("id", "123")
- *     .execute();
+ * // gRPC client
+ * GrpcClient<UserServiceGrpc.UserServiceBlockingStub> grpcClient =
+ *     ServiceClient.grpc("user-service", UserServiceGrpc.UserServiceBlockingStub.class)
+ *         .address("localhost:9090")
+ *         .build();
  *
- * // POST with request body
- * Mono<User> created = client.post("/users", User.class)
- *     .withBody(newUser)
- *     .execute();
+ * // SOAP client
+ * SoapClient soapClient = ServiceClient.soap("weather-service")
+ *     .wsdlUrl("http://example.com/service?WSDL")
+ *     .build();
  * }</pre>
  *
  * @author Firefly Software Solutions Inc
@@ -89,139 +95,22 @@ public interface ServiceClient {
         return new com.firefly.common.client.builder.GrpcClientBuilder<>(serviceName, stubType);
     }
 
-
-    // ========================================
-    // Request Builder Methods
-    // ========================================
-
     /**
-     * Creates a GET request builder.
+     * Creates a SOAP service client builder.
      *
-     * @param endpoint the endpoint path
-     * @param responseType the expected response type
-     * @param <R> the response type
-     * @return a request builder for GET operations
-     */
-    <R> RequestBuilder<R> get(String endpoint, Class<R> responseType);
-
-    /**
-     * Creates a GET request builder with TypeReference for generic types.
+     * <p>SOAP clients provide a modern reactive API over traditional SOAP/WSDL services
+     * with automatic service discovery, WS-Security support, and built-in resilience.
      *
-     * @param endpoint the endpoint path
-     * @param typeReference the type reference for generic response types
-     * @param <R> the response type
-     * @return a request builder for GET operations
+     * @param serviceName the name of the service
+     * @return a SOAP client builder
      */
-    <R> RequestBuilder<R> get(String endpoint, TypeReference<R> typeReference);
-
-    /**
-     * Creates a POST request builder.
-     *
-     * @param endpoint the endpoint path
-     * @param responseType the expected response type
-     * @param <R> the response type
-     * @return a request builder for POST operations
-     */
-    <R> RequestBuilder<R> post(String endpoint, Class<R> responseType);
-
-    /**
-     * Creates a POST request builder with TypeReference for generic types.
-     *
-     * @param endpoint the endpoint path
-     * @param typeReference the type reference for generic response types
-     * @param <R> the response type
-     * @return a request builder for POST operations
-     */
-    <R> RequestBuilder<R> post(String endpoint, TypeReference<R> typeReference);
-
-    /**
-     * Creates a PUT request builder.
-     *
-     * @param endpoint the endpoint path
-     * @param responseType the expected response type
-     * @param <R> the response type
-     * @return a request builder for PUT operations
-     */
-    <R> RequestBuilder<R> put(String endpoint, Class<R> responseType);
-
-    /**
-     * Creates a PUT request builder with TypeReference for generic types.
-     *
-     * @param endpoint the endpoint path
-     * @param typeReference the type reference for generic response types
-     * @param <R> the response type
-     * @return a request builder for PUT operations
-     */
-    <R> RequestBuilder<R> put(String endpoint, TypeReference<R> typeReference);
-
-    /**
-     * Creates a DELETE request builder.
-     *
-     * @param endpoint the endpoint path
-     * @param responseType the expected response type
-     * @param <R> the response type
-     * @return a request builder for DELETE operations
-     */
-    <R> RequestBuilder<R> delete(String endpoint, Class<R> responseType);
-
-    /**
-     * Creates a DELETE request builder with TypeReference for generic types.
-     *
-     * @param endpoint the endpoint path
-     * @param typeReference the type reference for generic response types
-     * @param <R> the response type
-     * @return a request builder for DELETE operations
-     */
-    <R> RequestBuilder<R> delete(String endpoint, TypeReference<R> typeReference);
-
-    /**
-     * Creates a PATCH request builder.
-     *
-     * @param endpoint the endpoint path
-     * @param responseType the expected response type
-     * @param <R> the response type
-     * @return a request builder for PATCH operations
-     */
-    <R> RequestBuilder<R> patch(String endpoint, Class<R> responseType);
-
-    /**
-     * Creates a PATCH request builder with TypeReference for generic types.
-     *
-     * @param endpoint the endpoint path
-     * @param typeReference the type reference for generic response types
-     * @param <R> the response type
-     * @return a request builder for PATCH operations
-     */
-    <R> RequestBuilder<R> patch(String endpoint, TypeReference<R> typeReference);
-
+    static com.firefly.common.client.builder.SoapClientBuilder soap(String serviceName) {
+        return new com.firefly.common.client.builder.SoapClientBuilder(serviceName);
+    }
 
 
     // ========================================
-    // Streaming Methods
-    // ========================================
-
-    /**
-     * Creates a streaming request for server-sent events or similar streaming responses.
-     *
-     * @param endpoint the endpoint path
-     * @param responseType the expected response type for each stream element
-     * @param <R> the response type
-     * @return a Flux containing the streaming response
-     */
-    <R> Flux<R> stream(String endpoint, Class<R> responseType);
-
-    /**
-     * Creates a streaming request with TypeReference for generic types.
-     *
-     * @param endpoint the endpoint path
-     * @param typeReference the type reference for generic response types
-     * @param <R> the response type
-     * @return a Flux containing the streaming response
-     */
-    <R> Flux<R> stream(String endpoint, TypeReference<R> typeReference);
-
-    // ========================================
-    // Client Metadata and Lifecycle
+    // Core Lifecycle and Health Operations
     // ========================================
 
     /**
@@ -230,13 +119,6 @@ public interface ServiceClient {
      * @return the service name
      */
     String getServiceName();
-
-    /**
-     * Returns the base URL for this service client (REST clients only).
-     *
-     * @return the base URL, or null for non-REST clients
-     */
-    String getBaseUrl();
 
     /**
      * Checks if the service client is ready to handle requests.
@@ -253,7 +135,7 @@ public interface ServiceClient {
     Mono<Void> healthCheck();
 
     /**
-     * Returns the client type (REST, GRPC, SDK).
+     * Returns the client type (REST, GRPC, SOAP).
      *
      * @return the client type
      */
@@ -261,121 +143,9 @@ public interface ServiceClient {
 
     /**
      * Shuts down the service client and releases resources.
+     *
+     * <p>After shutdown, the client should not be used for any operations.
+     * Implementations should clean up connections, channels, and other resources.
      */
     void shutdown();
-
-    // ========================================
-    // Nested Interfaces and Enums
-    // ========================================
-
-    // ClientType is defined as a separate class
-
-    /**
-     * Request builder interface for fluent API.
-     *
-     * @param <R> the response type
-     */
-    interface RequestBuilder<R> {
-        /**
-         * Sets the request body.
-         *
-         * @param body the request body
-         * @return this builder
-         */
-        RequestBuilder<R> withBody(Object body);
-
-        /**
-         * Sets a path parameter.
-         *
-         * @param name the parameter name
-         * @param value the parameter value
-         * @return this builder
-         */
-        RequestBuilder<R> withPathParam(String name, Object value);
-
-        /**
-         * Sets multiple path parameters.
-         *
-         * @param pathParams the path parameters
-         * @return this builder
-         */
-        RequestBuilder<R> withPathParams(Map<String, Object> pathParams);
-
-        /**
-         * Sets a query parameter.
-         *
-         * @param name the parameter name
-         * @param value the parameter value
-         * @return this builder
-         */
-        RequestBuilder<R> withQueryParam(String name, Object value);
-
-        /**
-         * Sets multiple query parameters.
-         *
-         * @param queryParams the query parameters
-         * @return this builder
-         */
-        RequestBuilder<R> withQueryParams(Map<String, Object> queryParams);
-
-        /**
-         * Sets a header.
-         *
-         * @param name the header name
-         * @param value the header value
-         * @return this builder
-         */
-        RequestBuilder<R> withHeader(String name, String value);
-
-        /**
-         * Sets multiple headers.
-         *
-         * @param headers the headers
-         * @return this builder
-         */
-        RequestBuilder<R> withHeaders(Map<String, String> headers);
-
-        /**
-         * Sets the request timeout.
-         *
-         * @param timeout the timeout duration
-         * @return this builder
-         */
-        RequestBuilder<R> withTimeout(Duration timeout);
-
-        /**
-         * Executes the request.
-         *
-         * @return a Mono containing the response
-         */
-        Mono<R> execute();
-
-        /**
-         * Executes the request as a stream.
-         *
-         * @return a Flux containing the streaming response
-         */
-        Flux<R> stream();
-    }
-
-    /**
-     * Client builder interfaces for different client types.
-     */
-    interface RestClientBuilder {
-        RestClientBuilder baseUrl(String baseUrl);
-        RestClientBuilder timeout(Duration timeout);
-        RestClientBuilder maxConnections(int maxConnections);
-        RestClientBuilder defaultHeader(String name, String value);
-        ServiceClient build();
-    }
-
-    interface GrpcClientBuilder<T> {
-        GrpcClientBuilder<T> address(String address);
-        GrpcClientBuilder<T> timeout(Duration timeout);
-        GrpcClientBuilder<T> usePlaintext();
-        GrpcClientBuilder<T> useTransportSecurity();
-        GrpcClientBuilder<T> stubFactory(Function<Object, T> stubFactory);
-        ServiceClient build();
-    }
-
 }

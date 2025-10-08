@@ -29,19 +29,28 @@ public enum ClientType {
     
     /**
      * REST/HTTP-based service client using WebClient.
-     * 
+     *
      * <p>Supports standard HTTP methods (GET, POST, PUT, DELETE, PATCH)
      * with JSON/XML serialization, form data, and file uploads.
      */
     REST("REST"),
-    
+
     /**
      * gRPC-based service client using Protocol Buffers.
-     * 
+     *
      * <p>Supports unary and streaming gRPC calls with efficient binary
      * serialization and built-in load balancing.
      */
-    GRPC("gRPC");
+    GRPC("gRPC"),
+
+    /**
+     * SOAP/Web Services client using JAX-WS and Apache CXF.
+     *
+     * <p>Supports SOAP 1.1 and 1.2 protocols with WSDL-based service discovery,
+     * WS-Security, MTOM attachments, and automatic XML marshalling/unmarshalling.
+     * Provides a modern reactive API over traditional SOAP services.
+     */
+    SOAP("SOAP");
     
 
     private final String displayName;
@@ -62,10 +71,10 @@ public enum ClientType {
     /**
      * Returns true if this client type supports HTTP-style operations.
      *
-     * @return true for REST clients, false for others
+     * @return true for REST and SOAP clients, false for others
      */
     public boolean isHttpBased() {
-        return this == REST;
+        return this == REST || this == SOAP;
     }
 
     /**
@@ -75,6 +84,24 @@ public enum ClientType {
      */
     public boolean supportsStreaming() {
         return this == GRPC || this == REST;
+    }
+
+    /**
+     * Returns true if this client type uses XML-based protocols.
+     *
+     * @return true for SOAP clients, false for others
+     */
+    public boolean isXmlBased() {
+        return this == SOAP;
+    }
+
+    /**
+     * Returns true if this client type supports WSDL-based service discovery.
+     *
+     * @return true for SOAP clients, false for others
+     */
+    public boolean supportsWsdl() {
+        return this == SOAP;
     }
 
     /**

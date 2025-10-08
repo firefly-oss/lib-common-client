@@ -16,6 +16,7 @@
 
 package com.firefly.common.client.builder;
 
+import com.firefly.common.client.GrpcClient;
 import com.firefly.common.client.ServiceClient;
 import com.firefly.common.client.impl.GrpcServiceClientImpl;
 import com.firefly.common.resilience.CircuitBreakerManager;
@@ -53,7 +54,7 @@ import java.util.function.Function;
  * @since 2.0.0
  */
 @Slf4j
-public class GrpcClientBuilder<T> implements ServiceClient.GrpcClientBuilder<T> {
+public class GrpcClientBuilder<T> {
 
     private final String serviceName;
     private final Class<T> stubType;
@@ -86,7 +87,6 @@ public class GrpcClientBuilder<T> implements ServiceClient.GrpcClientBuilder<T> 
                 this.serviceName, stubType.getSimpleName());
     }
 
-    @Override
     public GrpcClientBuilder<T> address(String address) {
         if (address == null || address.trim().isEmpty()) {
             throw new IllegalArgumentException("Address cannot be null or empty");
@@ -95,7 +95,6 @@ public class GrpcClientBuilder<T> implements ServiceClient.GrpcClientBuilder<T> 
         return this;
     }
 
-    @Override
     public GrpcClientBuilder<T> timeout(Duration timeout) {
         if (timeout == null || timeout.isNegative()) {
             throw new IllegalArgumentException("Timeout must be positive");
@@ -104,21 +103,18 @@ public class GrpcClientBuilder<T> implements ServiceClient.GrpcClientBuilder<T> 
         return this;
     }
 
-    @Override
     public GrpcClientBuilder<T> usePlaintext() {
         this.usePlaintext = true;
         this.useTransportSecurity = false;
         return this;
     }
 
-    @Override
     public GrpcClientBuilder<T> useTransportSecurity() {
         this.useTransportSecurity = true;
         this.usePlaintext = false;
         return this;
     }
 
-    @Override
     public GrpcClientBuilder<T> stubFactory(Function<Object, T> stubFactory) {
         if (stubFactory == null) {
             throw new IllegalArgumentException("Stub factory cannot be null");
@@ -151,8 +147,7 @@ public class GrpcClientBuilder<T> implements ServiceClient.GrpcClientBuilder<T> 
         return this;
     }
 
-    @Override
-    public ServiceClient build() {
+    public GrpcClient<T> build() {
         validateConfiguration();
         
         log.info("Building gRPC service client for service '{}' with address '{}'", 

@@ -16,6 +16,7 @@
 
 package com.firefly.common.client.builder;
 
+import com.firefly.common.client.RestClient;
 import com.firefly.common.client.ServiceClient;
 import com.firefly.common.client.impl.RestServiceClientImpl;
 import com.firefly.common.resilience.CircuitBreakerManager;
@@ -53,7 +54,7 @@ import java.util.Map;
  * @since 2.0.0
  */
 @Slf4j
-public class RestClientBuilder implements ServiceClient.RestClientBuilder {
+public class RestClientBuilder {
 
     private final String serviceName;
     private String baseUrl;
@@ -81,7 +82,6 @@ public class RestClientBuilder implements ServiceClient.RestClientBuilder {
         log.debug("Created REST client builder for service '{}'", this.serviceName);
     }
 
-    @Override
     public RestClientBuilder baseUrl(String baseUrl) {
         if (baseUrl == null || baseUrl.trim().isEmpty()) {
             throw new IllegalArgumentException("Base URL cannot be null or empty");
@@ -94,7 +94,6 @@ public class RestClientBuilder implements ServiceClient.RestClientBuilder {
         return this;
     }
 
-    @Override
     public RestClientBuilder timeout(Duration timeout) {
         if (timeout == null || timeout.isNegative()) {
             throw new IllegalArgumentException("Timeout must be positive");
@@ -103,7 +102,6 @@ public class RestClientBuilder implements ServiceClient.RestClientBuilder {
         return this;
     }
 
-    @Override
     public RestClientBuilder maxConnections(int maxConnections) {
         if (maxConnections <= 0) {
             throw new IllegalArgumentException("Max connections must be positive");
@@ -112,7 +110,6 @@ public class RestClientBuilder implements ServiceClient.RestClientBuilder {
         return this;
     }
 
-    @Override
     public RestClientBuilder defaultHeader(String name, String value) {
         if (name == null || name.trim().isEmpty()) {
             throw new IllegalArgumentException("Header name cannot be null or empty");
@@ -169,8 +166,7 @@ public class RestClientBuilder implements ServiceClient.RestClientBuilder {
                .defaultHeader("Accept", "application/xml");
     }
 
-    @Override
-    public ServiceClient build() {
+    public RestClient build() {
         validateConfiguration();
         
         log.info("Building REST service client for service '{}' with base URL '{}'", 
