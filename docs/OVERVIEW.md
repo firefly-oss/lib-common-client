@@ -2,7 +2,17 @@
 
 ## Introduction
 
-The `lib-common-client` library is a comprehensive, reactive service communication framework designed for microservice architectures. It provides a unified API for REST and gRPC communication while maintaining protocol-specific optimizations and built-in resilience patterns.
+The `lib-common-client` library is a comprehensive, reactive service communication framework designed for microservice architectures. It provides **protocol-specific interfaces** for REST, gRPC, and SOAP communication while maintaining built-in resilience patterns and a unified core.
+
+## Architecture Philosophy
+
+The library uses a **protocol-specific facade pattern** where each protocol has its own specialized interface:
+
+- **`RestClient`**: HTTP verbs (GET, POST, PUT, DELETE, PATCH) for REST services
+- **`GrpcClient<T>`**: Native gRPC operations (unary, streaming) with type-safe stubs
+- **`SoapClient`**: SOAP operation invocation with WSDL introspection
+
+All interfaces extend a common `ServiceClient` core that provides factory methods and lifecycle operations.
 
 ## Getting Started with Client Setup
 
@@ -10,18 +20,23 @@ The `lib-common-client` library is a comprehensive, reactive service communicati
 
 Setting up a service client involves three main steps:
 
-1. **Choose Client Type**: Decide between REST or gRPC based on your service protocol
+1. **Choose Client Type**: Decide between REST, gRPC, or SOAP based on your service protocol
 2. **Build the Client**: Use the fluent builder API to configure the client
 3. **Configure Properties**: Optionally customize behavior via `application.yml`
 
 ### REST Client Setup
 
 ```java
-ServiceClient restClient = ServiceClient.rest("my-service")
+RestClient restClient = ServiceClient.rest("my-service")
     .baseUrl("http://localhost:8080")      // Required: Service base URL
     .timeout(Duration.ofSeconds(30))       // Optional: Request timeout
     .jsonContentType()                     // Optional: Set JSON content type
     .build();
+
+// Use HTTP verbs naturally
+Mono<User> user = restClient.get("/users/{id}", User.class)
+    .withPathParam("id", "123")
+    .execute();
 ```
 
 **Key Configuration Points:**
@@ -29,16 +44,22 @@ ServiceClient restClient = ServiceClient.rest("my-service")
 - `timeout()` controls how long to wait for responses (default: 30s)
 - `jsonContentType()` sets appropriate headers for JSON communication
 - Additional headers can be added with `defaultHeader(name, value)`
+- Returns `RestClient` with HTTP verb methods
 
 ### gRPC Client Setup
 
 ```java
-ServiceClient grpcClient = ServiceClient.grpc("payment-service", PaymentServiceStub.class)
+GrpcClient<PaymentServiceStub> grpcClient = ServiceClient.grpc("payment-service", PaymentServiceStub.class)
     .address("localhost:9090")                                      // Required: gRPC address
     .usePlaintext()                                                 // Optional: For development
     .timeout(Duration.ofSeconds(30))                                // Optional: Call timeout
     .stubFactory(channel -> PaymentServiceGrpc.newStub(channel))   // Required: Stub factory
     .build();
+
+// Use native gRPC operations
+Mono<PaymentResponse> response = grpcClient.unary(stub ->
+    stub.processPayment(paymentRequest)
+);
 ```
 
 **Key Configuration Points:**
@@ -46,6 +67,32 @@ ServiceClient grpcClient = ServiceClient.grpc("payment-service", PaymentServiceS
 - `stubFactory()` is required and creates the gRPC stub from a channel
 - `usePlaintext()` disables TLS (use only in development)
 - `useTransportSecurity()` enables TLS for production environments
+- Returns `GrpcClient<T>` with native gRPC operations
+
+### SOAP Client Setup
+
+```java
+SoapClient soapClient = ServiceClient.soap("calculator-service")
+    .wsdlUrl("http://localhost:8080/calculator?WSDL")  // Required: WSDL URL
+    .timeout(Duration.ofSeconds(30))                    // Optional: Request timeout
+    .credentials("username", "password")                // Optional: WS-Security
+    .build();
+
+// Invoke SOAP operations
+Mono<Integer> result = soapClient.invokeAsync("Add", request, Integer.class);
+
+// Or use fluent builder
+Mono<Integer> result = soapClient.invoke("Add")
+    .withParameter("a", 5)
+    .withParameter("b", 3)
+    .execute(Integer.class);
+```
+
+**Key Configuration Points:**
+- `wsdlUrl()` is required and specifies the WSDL location
+- `credentials()` enables WS-Security authentication
+- `enableMtom()` enables binary attachment support
+- Returns `SoapClient` with SOAP operation methods
 
 ### Configuration via Properties
 
@@ -66,20 +113,57 @@ firefly:
     grpc:
       keep-alive-time: 5m
       max-inbound-message-size: 4194304
+
+    soap:
+      default-timeout: 30s
+      mtom-enabled: false
+      schema-validation-enabled: true
 ```
 
 These properties apply globally to all clients created in your application.
 
 ## Core Components
 
-### ServiceClient Interface
+### Protocol-Specific Interfaces
 
-The `ServiceClient` interface (`com.firefly.common.client.ServiceClient`) is the main entry point for all service communication. It provides:
+The library provides three protocol-specific interfaces, all extending a common `ServiceClient` core:
 
-- **Unified API**: Single interface for REST and gRPC protocols
-- **Reactive Operations**: Built on Project Reactor with `Mono<T>` and `Flux<T>` return types
-- **Type Safety**: Generic support with `Class<T>` and `TypeReference<T>` for complex types
-- **Fluent API**: Method chaining for request building
+#### ServiceClient (Core Interface)
+
+The `ServiceClient` interface (`com.firefly.common.client.ServiceClient`) provides:
+
+- **Factory Methods**: `rest()`, `grpc()`, `soap()` for creating protocol-specific clients
+- **Lifecycle Operations**: `getServiceName()`, `isReady()`, `healthCheck()`, `shutdown()`
+- **Type Information**: `getClientType()` returns the protocol type
+
+#### RestClient
+
+The `RestClient` interface extends `ServiceClient` and provides:
+
+- **HTTP Verb Methods**: `get()`, `post()`, `put()`, `delete()`, `patch()`
+- **Streaming Support**: `stream()` for Server-Sent Events
+- **Fluent Request Builder**: `RequestBuilder<R>` for building complex requests
+- **REST Metadata**: `getBaseUrl()` returns the base URL
+
+#### GrpcClient<T>
+
+The `GrpcClient<T>` interface extends `ServiceClient` and provides:
+
+- **Direct Stub Access**: `getStub()` returns the typed gRPC stub
+- **Unary Operations**: `unary()`, `execute()` for single request/response
+- **Server Streaming**: `serverStream()`, `executeStream()` for server-side streaming
+- **Client Streaming**: `clientStream()` for client-side streaming
+- **Bidirectional Streaming**: `bidiStream()` for full-duplex streaming
+- **gRPC Metadata**: `getAddress()`, `getChannel()` for low-level access
+
+#### SoapClient
+
+The `SoapClient` interface extends `ServiceClient` and provides:
+
+- **Operation Invocation**: `invoke()`, `invokeAsync()` for calling SOAP operations
+- **WSDL Introspection**: `getOperations()` lists available operations
+- **Port Access**: `getPort()` for typed port access
+- **SOAP Metadata**: `getWsdlUrl()`, `getServiceQName()`, `getPortQName()`
 
 ### Client Types
 
@@ -88,7 +172,8 @@ The library supports the following client types defined in `ClientType` enum:
 ```java
 public enum ClientType {
     REST("REST"),     // HTTP/REST clients using WebClient
-    GRPC("gRPC");     // gRPC clients using Protocol Buffers
+    GRPC("gRPC"),     // gRPC clients using Protocol Buffers
+    SOAP("SOAP");     // SOAP clients using JAX-WS
 }
 ```
 
@@ -96,7 +181,8 @@ public enum ClientType {
 
 #### RestClientBuilder
 - **Class**: `com.firefly.common.client.builder.RestClientBuilder`
-- **Purpose**: Creates REST/HTTP service clients
+- **Purpose**: Creates `RestClient` instances for REST/HTTP services
+- **Returns**: `RestClient`
 - **Key Methods**:
   - `baseUrl(String)`: Sets the service base URL
   - `timeout(Duration)`: Configures request timeout
@@ -105,27 +191,48 @@ public enum ClientType {
   - `jsonContentType()`: Convenience method for JSON headers
   - `xmlContentType()`: Convenience method for XML headers
 
-#### GrpcClientBuilder
+#### GrpcClientBuilder<T>
 - **Class**: `com.firefly.common.client.builder.GrpcClientBuilder<T>`
-- **Purpose**: Creates gRPC service clients
+- **Purpose**: Creates `GrpcClient<T>` instances for gRPC services
+- **Returns**: `GrpcClient<T>`
 - **Key Methods**:
   - `address(String)`: Sets the gRPC service address
   - `timeout(Duration)`: Configures call timeout
   - `usePlaintext()`: Enables plaintext connections
   - `useTransportSecurity()`: Enables TLS
-  - `stubFactory(Function<Object, T>)`: Sets stub factory
+  - `stubFactory(Function<ManagedChannel, T>)`: Sets stub factory
+
+#### SoapClientBuilder
+- **Class**: `com.firefly.common.client.builder.SoapClientBuilder`
+- **Purpose**: Creates `SoapClient` instances for SOAP/WSDL services
+- **Returns**: `SoapClient`
+- **Key Methods**:
+  - `wsdlUrl(String)`: Sets the WSDL URL
+  - `timeout(Duration)`: Configures request timeout
+  - `credentials(String, String)`: Sets WS-Security credentials
+  - `enableMtom()`: Enables MTOM for binary attachments
+  - `trustStore(String, String)`: Configures SSL trust store
+  - `disableSslVerification()`: Disables SSL verification (development only)
 
 ## Implementation Architecture
 
 ### REST Implementation
 - **Class**: `com.firefly.common.client.impl.RestServiceClientImpl`
+- **Implements**: `RestClient`
 - **Uses**: Spring WebFlux `WebClient`
-- **Features**: Connection pooling, compression, redirects, custom headers
+- **Features**: Connection pooling, compression, redirects, custom headers, HTTP verb methods
 
 ### gRPC Implementation
 - **Class**: `com.firefly.common.client.impl.GrpcServiceClientImpl<T>`
+- **Implements**: `GrpcClient<T>`
 - **Uses**: gRPC ManagedChannel and generated stubs
-- **Features**: Keep-alive, compression, metadata propagation, streaming support
+- **Features**: Keep-alive, compression, metadata propagation, full streaming support (unary, server, client, bidi)
+
+### SOAP Implementation
+- **Class**: `com.firefly.common.client.impl.SoapServiceClientImpl`
+- **Implements**: `SoapClient`
+- **Uses**: Apache CXF JAX-WS libraries
+- **Features**: WSDL parsing, dynamic invocation, WS-Security, MTOM, SSL/TLS
 
 ## Resilience Patterns
 

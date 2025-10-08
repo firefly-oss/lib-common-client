@@ -6,20 +6,21 @@
 [![Reactive](https://img.shields.io/badge/Reactive-WebFlux-purple)](https://projectreactor.io/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-A comprehensive, reactive service communication framework for microservice architectures developed by **Firefly Software Solutions Inc**. Provides unified REST and gRPC client interfaces with built-in resilience patterns, circuit breakers, and comprehensive observability.
+A comprehensive, reactive service communication framework for microservice architectures developed by **Firefly Software Solutions Inc**. Provides unified REST, gRPC, and SOAP client interfaces with built-in resilience patterns, circuit breakers, and comprehensive observability.
 
 > **Developed by [Firefly Software Solutions Inc](https://getfirefly.io)** - Building enterprise-grade solutions for modern microservice architectures.
 
 ## 🚀 Features
 
 ### Core Capabilities
-- **🔗 Unified API**: Single interface for REST and gRPC communication
+- **🔗 Protocol-Specific Interfaces**: Natural APIs for REST (HTTP verbs), gRPC (streaming), and SOAP (operations)
 - **⚡ Reactive Programming**: Non-blocking operations with Spring WebFlux and Project Reactor
 - **🛡️ Circuit Breaker**: Advanced resilience patterns with automatic recovery
 - **💊 Health Checks**: Built-in service health monitoring and diagnostics
 - **📊 Observability**: Metrics, tracing, and logging integration
-- **🔄 Streaming Support**: Server-Sent Events and gRPC streaming
-- **🎯 Type Safety**: Strong typing with generics and compile-time validation
+- **🔄 Full Streaming Support**: Server-Sent Events, gRPC unary/server/client/bidirectional streaming
+- **🎯 Type Safety**: Protocol-specific types prevent misuse and provide compile-time validation
+- **🌐 SOAP/WSDL Support**: Modern reactive API for legacy SOAP services with dynamic invocation
 
 ### Advanced Features
 - **🏗️ Builder Pattern**: Fluent API for client configuration
@@ -72,14 +73,15 @@ public class MyApplication {
 ### Simple REST Example
 
 ```java
+import com.firefly.common.client.RestClient;
 import com.firefly.common.client.ServiceClient;
 import reactor.core.publisher.Mono;
 
 @Service
 public class UserService {
-    
-    private final ServiceClient userClient;
-    
+
+    private final RestClient userClient;
+
     public UserService() {
         this.userClient = ServiceClient.rest("user-service")
             .baseUrl("http://user-service:8080")
@@ -87,13 +89,13 @@ public class UserService {
             .jsonContentType()
             .build();
     }
-    
+
     public Mono<User> getUser(String userId) {
         return userClient.get("/users/{id}", User.class)
             .withPathParam("id", userId)
             .execute();
     }
-    
+
     public Mono<User> createUser(CreateUserRequest request) {
         return userClient.post("/users", User.class)
             .withBody(request)
@@ -162,6 +164,7 @@ public class MyApplication {
 Create a service class and build your first REST client:
 
 ```java
+import com.firefly.common.client.RestClient;
 import com.firefly.common.client.ServiceClient;
 import reactor.core.publisher.Mono;
 import org.springframework.stereotype.Service;
@@ -170,7 +173,7 @@ import java.time.Duration;
 @Service
 public class UserService {
 
-    private final ServiceClient userClient;
+    private final RestClient userClient;
 
     public UserService() {
         // Build a REST client with essential properties
@@ -241,33 +244,73 @@ firefly:
 If you're using gRPC, here's how to set up your first gRPC client:
 
 ```java
+import com.firefly.common.client.GrpcClient;
 import com.firefly.common.client.ServiceClient;
-import com.firefly.common.client.impl.GrpcServiceClientImpl;
 import com.example.grpc.PaymentServiceGrpc;
 import com.example.grpc.PaymentServiceGrpc.PaymentServiceStub;
 
 @Service
 public class PaymentService {
 
-    private final GrpcServiceClientImpl<PaymentServiceStub> paymentClient;
+    private final GrpcClient<PaymentServiceStub> paymentClient;
 
     public PaymentService() {
-        ServiceClient client = ServiceClient.grpc("payment-service", PaymentServiceStub.class)
+        this.paymentClient = ServiceClient.grpc("payment-service", PaymentServiceStub.class)
             .address("localhost:9090")                                      // Required: gRPC service address
             .usePlaintext()                                                 // Optional: Use for development (no TLS)
             .timeout(Duration.ofSeconds(30))                                // Optional: Call timeout
             .stubFactory(channel -> PaymentServiceGrpc.newStub(channel))   // Required: How to create the stub
             .build();
-
-        this.paymentClient = (GrpcServiceClientImpl<PaymentServiceStub>) client;
     }
 
     public Mono<PaymentResponse> processPayment(PaymentRequest request) {
-        return paymentClient.executeWithCircuitBreaker(
-            Mono.fromCallable(() -> paymentClient.getStub().processPayment(request))
-        );
+        // Use native gRPC unary operation
+        return paymentClient.unary(stub -> stub.processPayment(request));
     }
 }
+```
+
+### Step 6b: Create Your First SOAP Client (Optional)
+
+If you need to integrate with legacy SOAP/WSDL services, here's how to set up a SOAP client with a modern reactive API:
+
+```java
+import com.firefly.common.client.SoapClient;
+import com.firefly.common.client.ServiceClient;
+import reactor.core.publisher.Mono;
+
+@Service
+public class WeatherService {
+
+    private final SoapClient weatherClient;
+
+    public WeatherService() {
+        this.weatherClient = ServiceClient.soap("weather-service")
+            .wsdlUrl("http://www.webservicex.net/globalweather.asmx?WSDL")  // Required: WSDL URL
+            .timeout(Duration.ofSeconds(30))                                  // Optional: Request timeout
+            .build();
+    }
+
+    public Mono<WeatherResponse> getWeather(String city, String country) {
+        WeatherRequest request = new WeatherRequest();
+        request.setCityName(city);
+        request.setCountryName(country);
+
+        return weatherClient.invokeAsync("GetWeather", request, WeatherResponse.class);
+    }
+}
+```
+
+#### SOAP Client with Authentication
+
+```java
+SoapClient secureSOAPClient = ServiceClient.soap("payment-service")
+    .wsdlUrl("https://secure.example.com/payment?wsdl")
+    .credentials("api-user", "secret-password")          // WS-Security username/password
+    .timeout(Duration.ofSeconds(45))
+    .enableMtom()                                        // Enable for large binary transfers
+    .header("X-API-Key", "your-api-key")                // Custom HTTP headers
+    .build();
 ```
 
 ### Step 7: Common Configuration Patterns
@@ -275,7 +318,7 @@ public class PaymentService {
 #### Pattern 1: Service with Authentication
 
 ```java
-ServiceClient authenticatedClient = ServiceClient.rest("secure-service")
+RestClient authenticatedClient = ServiceClient.rest("secure-service")
     .baseUrl("https://api.example.com")
     .defaultHeader("Authorization", "Bearer your-token-here")
     .defaultHeader("X-API-Key", "your-api-key")
@@ -286,7 +329,7 @@ ServiceClient authenticatedClient = ServiceClient.rest("secure-service")
 #### Pattern 2: High-Performance Service
 
 ```java
-ServiceClient highPerfClient = ServiceClient.rest("high-perf-service")
+RestClient highPerfClient = ServiceClient.rest("high-perf-service")
     .baseUrl("http://fast-service:8080")
     .timeout(Duration.ofSeconds(5))        // Short timeout for fast service
     .maxConnections(200)                   // Large connection pool
@@ -380,37 +423,36 @@ events.bufferTimeout(100, Duration.ofSeconds(5))
 #### Basic gRPC Setup
 
 ```java
+import com.firefly.common.client.GrpcClient;
 import com.firefly.common.client.ServiceClient;
-import com.firefly.common.client.impl.GrpcServiceClientImpl;
 import com.example.grpc.PaymentServiceGrpc;
 import com.example.grpc.PaymentServiceGrpc.PaymentServiceStub;
 
 @Service
 public class PaymentService {
-    
-    private final GrpcServiceClientImpl<PaymentServiceStub> grpcClient;
-    
+
+    private final GrpcClient<PaymentServiceStub> grpcClient;
+
     public PaymentService() {
-        ServiceClient client = ServiceClient.grpc("payment-service", PaymentServiceStub.class)
+        this.grpcClient = ServiceClient.grpc("payment-service", PaymentServiceStub.class)
             .address("payment-service:9090")
             .usePlaintext()
             .timeout(Duration.ofSeconds(30))
             .stubFactory(channel -> PaymentServiceGrpc.newStub(channel))
             .build();
-        
-        this.grpcClient = (GrpcServiceClientImpl<PaymentServiceStub>) client;
     }
-    
+
     public Mono<PaymentResponse> processPayment(PaymentRequest request) {
-        return grpcClient.executeWithCircuitBreaker(
-            Mono.fromCallable(() -> grpcClient.getStub().processPayment(request))
-        );
+        // Use native gRPC unary operation
+        return grpcClient.unary(stub -> stub.processPayment(request));
     }
-    
+
     public Flux<TransactionEvent> streamTransactions(String accountId) {
-        return grpcClient.executeStreamWithCircuitBreaker(
-            // gRPC streaming call implementation
-            createTransactionStream(accountId)
+        // Use native gRPC server streaming
+        return grpcClient.serverStream(stub ->
+            stub.streamTransactions(AccountRequest.newBuilder()
+                .setAccountId(accountId)
+                .build())
         );
     }
 }
@@ -451,7 +493,7 @@ firefly:
       default-content-type: "application/json"
       default-accept-type: "application/json"
     
-    # gRPC Configuration  
+    # gRPC Configuration
     grpc:
       keep-alive-time: 5m
       keep-alive-timeout: 30s
@@ -463,7 +505,23 @@ firefly:
       use-plaintext-by-default: true
       compression-enabled: true
       max-concurrent-streams: 100
-    
+
+    # SOAP Configuration
+    soap:
+      default-timeout: 30s
+      connection-timeout: 10s
+      receive-timeout: 30s
+      mtom-enabled: false                # Enable for large binary transfers
+      schema-validation-enabled: true
+      message-logging-enabled: false     # Enable for debugging
+      max-message-size: 10485760         # 10MB
+      ws-addressing-enabled: false
+      ws-security-enabled: false
+      soap-version: "1.1"                # 1.1 or 1.2
+      wsdl-cache-enabled: true
+      wsdl-cache-expiration: 1h
+      follow-redirects: true
+
     # Circuit Breaker Configuration
     circuit-breaker:
       enabled: true
@@ -508,7 +566,7 @@ firefly:
 public class ServiceClientConfig {
     
     @Bean
-    public ServiceClient customerServiceClient() {
+    public RestClient customerServiceClient() {
         return ServiceClient.rest("customer-service")
             .baseUrl("http://customer-service:8080")
             .timeout(Duration.ofSeconds(30))
@@ -519,7 +577,7 @@ public class ServiceClientConfig {
     }
     
     @Bean
-    public ServiceClient orderServiceClient() {
+    public RestClient orderServiceClient() {
         return ServiceClient.rest("order-service")
             .baseUrl("https://order-service.example.com")
             .timeout(Duration.ofSeconds(45))
@@ -529,7 +587,7 @@ public class ServiceClientConfig {
     }
     
     @Bean
-    public ServiceClient notificationServiceClient() {
+    public GrpcClient<NotificationServiceStub> notificationServiceClient() {
         return ServiceClient.grpc("notification-service", NotificationServiceStub.class)
             .address("notification-service:9090")
             .usePlaintext()
@@ -537,7 +595,18 @@ public class ServiceClientConfig {
             .stubFactory(channel -> NotificationServiceGrpc.newStub(channel))
             .build();
     }
-    
+
+    @Bean
+    public SoapClient legacyPaymentServiceClient() {
+        return ServiceClient.soap("legacy-payment-service")
+            .wsdlUrl("http://legacy-payment.example.com/service?wsdl")
+            .credentials("api-user", "secret-password")
+            .timeout(Duration.ofSeconds(45))
+            .enableMtom()
+            .header("X-API-Key", "${payment.api.key}")
+            .build();
+    }
+
     @Bean
     public CircuitBreakerConfig customCircuitBreakerConfig() {
         return CircuitBreakerConfig.builder()

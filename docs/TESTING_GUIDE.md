@@ -80,7 +80,7 @@ void shouldPerformGetRequestSuccessfully() {
             .withBody(jsonResponse)));
 
     // When: Performing a GET request
-    ServiceClient client = ServiceClient.rest("user-service")
+    RestClient client = ServiceClient.rest("user-service")
         .baseUrl(baseUrl)
         .build();
 
@@ -131,23 +131,24 @@ void shouldPerformGetRequestSuccessfully() {
 @DisplayName("Should perform unary RPC call successfully")
 void shouldPerformUnaryRpcCallSuccessfully() {
     // Given: A gRPC client
-    GrpcServiceClientImpl<TestServiceGrpc.TestServiceBlockingStub> client = 
-        (GrpcServiceClientImpl<TestServiceGrpc.TestServiceBlockingStub>) 
+    GrpcClient<TestServiceGrpc.TestServiceBlockingStub> client =
         ServiceClient.grpc("test-service", TestServiceGrpc.TestServiceBlockingStub.class)
             .address(SERVER_NAME)
             .usePlaintext()
             .stubFactory(ch -> TestServiceGrpc.newBlockingStub(channel))
             .build();
 
-    // When: Performing a unary call
-    TestServiceGrpc.TestServiceBlockingStub stub = client.getStub();
+    // When: Performing a unary call using native gRPC API
     TestRequest request = TestRequest.newBuilder()
         .setMessage("Hello gRPC")
         .build();
-    TestResponse response = stub.unaryCall(request);
+    Mono<TestResponse> responseMono = client.unary(stub -> stub.unaryCall(request));
 
     // Then: The response should be correct
-    assertThat(response.getMessage()).isEqualTo("Echo: Hello gRPC");
+    StepVerifier.create(responseMono)
+        .assertNext(response ->
+            assertThat(response.getMessage()).isEqualTo("Echo: Hello gRPC"))
+        .verifyComplete();
 }
 ```
 
@@ -188,15 +189,13 @@ void shouldPerformUnaryRpcCallSuccessfully() {
 @DisplayName("Should invoke SOAP operation successfully")
 void shouldInvokeSoapOperationSuccessfully() {
     // Given: A SOAP client
-    ServiceClient client = ServiceClient.soap("calculator-service")
+    SoapClient client = ServiceClient.soap("calculator-service")
         .wsdlUrl(wsdlUrl)
         .build();
 
     // When: Invoking a SOAP operation
     CalculatorRequest request = new CalculatorRequest(5, 3);
-    Mono<Integer> response = client.post("Add", Integer.class)
-        .withBody(request)
-        .execute();
+    Mono<Integer> response = client.invokeAsync("Add", request, Integer.class);
 
     // Then: The response should be correct
     StepVerifier.create(response)

@@ -2,62 +2,160 @@
 
 ## System Overview
 
-The `lib-common-client` library follows a layered architecture designed for reactive, non-blocking service communication in microservice environments. The architecture emphasizes separation of concerns, extensibility, and resilience patterns.
+The `lib-common-client` library follows a layered architecture designed for reactive, non-blocking service communication in microservice environments. The architecture emphasizes **protocol-specific interfaces**, separation of concerns, extensibility, and resilience patterns.
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Application Layer                         │
-├─────────────────────────────────────────────────────────────┤
-│                  ServiceClient Interface                     │
-├─────────────────────────────────────────────────────────────┤
-│   REST Implementation    │    gRPC Implementation           │
-│   (RestServiceClientImpl)│    (GrpcServiceClientImpl)       │
-├─────────────────────────────────────────────────────────────┤
-│              Resilience Layer (Circuit Breaker)             │
-├─────────────────────────────────────────────────────────────┤
-│    WebClient (HTTP/REST) │  ManagedChannel (gRPC)          │
-├─────────────────────────────────────────────────────────────┤
-│                   Network Transport Layer                    │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         Application Layer                                │
+├──────────────────────────────────────────────────────────────────────────┤
+│                    ServiceClient Core Interface                          │
+│                  (Factory Methods & Lifecycle)                           │
+├──────────────────────────────────────────────────────────────────────────┤
+│   RestClient    │    GrpcClient<T>    │    SoapClient                    │
+│   (HTTP Verbs)  │  (gRPC Operations)  │ (SOAP Operations)                │
+├──────────────────────────────────────────────────────────────────────────┤
+│  REST Implementation  │  gRPC Implementation  │  SOAP Implementation     │
+│(RestServiceClientImpl)│(GrpcServiceClientImpl)│ (SoapServiceClientImpl)  │
+├──────────────────────────────────────────────────────────────────────────┤
+│                   Resilience Layer (Circuit Breaker)                     │
+├──────────────────────────────────────────────────────────────────────────┤
+│ WebClient (HTTP/REST) │ ManagedChannel (gRPC) │ Apache CXF (SOAP/WSDL)   │
+├──────────────────────────────────────────────────────────────────────────┤
+│                        Network Transport Layer                           │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Core Components
 
 ### 1. ServiceClient Interface Layer
 
-**Location**: `com.firefly.common.client.ServiceClient`
+The library uses a **protocol-specific facade pattern** where each protocol (REST, gRPC, SOAP) has its own specialized interface extending a common `ServiceClient` core. This design provides:
 
-The `ServiceClient` interface serves as the unified entry point for all service communication. It provides:
-
-- **Protocol Abstraction**: Hides REST vs gRPC implementation details
+- **Natural Protocol APIs**: Each protocol exposes methods that match its native semantics
+- **Type Safety**: Protocol-specific types prevent misuse (e.g., can't call HTTP verbs on gRPC clients)
 - **Reactive API**: All methods return `Mono<T>` or `Flux<T>`
-- **Type Safety**: Generic type support with compile-time checking
 - **Fluent Interface**: Method chaining for request building
 
-#### Key Interface Methods:
+#### ServiceClient Core Interface
+
+**Location**: `com.firefly.common.client.ServiceClient`
+
+The core interface provides factory methods and common lifecycle operations:
 
 ```java
 public interface ServiceClient {
     // Factory methods
     static RestClientBuilder rest(String serviceName);
     static <T> GrpcClientBuilder<T> grpc(String serviceName, Class<T> stubType);
-    
+    static SoapClientBuilder soap(String serviceName);
+
+    // Lifecycle methods (common to all protocols)
+    String getServiceName();
+    boolean isReady();
+    Mono<Void> healthCheck();
+    ClientType getClientType();
+    void shutdown();
+}
+```
+
+#### RestClient Interface
+
+**Location**: `com.firefly.common.client.RestClient`
+
+Protocol-specific interface for REST/HTTP services:
+
+```java
+public interface RestClient extends ServiceClient {
     // HTTP verb methods
     <R> RequestBuilder<R> get(String endpoint, Class<R> responseType);
     <R> RequestBuilder<R> post(String endpoint, Class<R> responseType);
     <R> RequestBuilder<R> put(String endpoint, Class<R> responseType);
     <R> RequestBuilder<R> delete(String endpoint, Class<R> responseType);
     <R> RequestBuilder<R> patch(String endpoint, Class<R> responseType);
-    
+
     // Streaming methods
     <R> Flux<R> stream(String endpoint, Class<R> responseType);
-    
-    // Lifecycle methods
-    String getServiceName();
-    boolean isReady();
-    Mono<Void> healthCheck();
-    ClientType getClientType();
-    void shutdown();
+
+    // REST-specific metadata
+    String getBaseUrl();
+
+    // Fluent request builder
+    interface RequestBuilder<R> {
+        RequestBuilder<R> withPathParam(String name, Object value);
+        RequestBuilder<R> withQueryParam(String name, Object value);
+        RequestBuilder<R> withHeader(String name, String value);
+        RequestBuilder<R> withBody(Object body);
+        RequestBuilder<R> withTimeout(Duration timeout);
+        Mono<R> execute();
+    }
+}
+```
+
+#### GrpcClient Interface
+
+**Location**: `com.firefly.common.client.GrpcClient`
+
+Protocol-specific interface for gRPC services with full streaming support:
+
+```java
+public interface GrpcClient<T> extends ServiceClient {
+    // Direct stub access
+    T getStub();
+
+    // Unary operations
+    <R> Mono<R> unary(Function<T, R> operation);
+    <R> Mono<R> execute(Function<T, R> operation);
+
+    // Server streaming
+    <R> Flux<R> serverStream(Function<T, Iterator<R>> operation);
+    <R> Flux<R> executeStream(Function<T, Publisher<R>> operation);
+
+    // Client streaming
+    <Req, Res> Mono<Res> clientStream(
+        Function<T, StreamObserver<Res>> operation,
+        Publisher<Req> requests
+    );
+
+    // Bidirectional streaming
+    <Req, Res> Flux<Res> bidiStream(
+        Function<T, StreamObserver<Res>> operation,
+        Publisher<Req> requests
+    );
+
+    // gRPC-specific metadata
+    String getAddress();
+    ManagedChannel getChannel();
+}
+```
+
+#### SoapClient Interface
+
+**Location**: `com.firefly.common.client.SoapClient`
+
+Protocol-specific interface for SOAP/WSDL services:
+
+```java
+public interface SoapClient extends ServiceClient {
+    // Operation invocation
+    OperationBuilder invoke(String operationName);
+    <Req, Res> Mono<Res> invokeAsync(String operationName, Req request, Class<Res> responseType);
+
+    // WSDL introspection
+    List<String> getOperations();
+    <P> P getPort(Class<P> portType);
+
+    // SOAP-specific metadata
+    String getWsdlUrl();
+    QName getServiceQName();
+    QName getPortQName();
+
+    // Fluent operation builder
+    interface OperationBuilder {
+        OperationBuilder withParameter(String name, Object value);
+        OperationBuilder withHeader(String name, String value);
+        OperationBuilder withTimeout(Duration timeout);
+        <R> Mono<R> execute(Class<R> responseType);
+    }
 }
 ```
 
@@ -67,24 +165,25 @@ public interface ServiceClient {
 
 **Location**: `com.firefly.common.client.impl.RestServiceClientImpl`
 
-Built on Spring WebFlux's `WebClient`, this implementation provides:
+Implements `RestClient` interface. Built on Spring WebFlux's `WebClient`, this implementation provides:
 
 - **Connection Pooling**: Reactor Netty connection pool with configurable limits
 - **HTTP/2 Support**: Automatic protocol negotiation
 - **Request/Response Processing**: JSON/XML serialization via Jackson
 - **Error Mapping**: HTTP status codes to domain exceptions
 - **Streaming Support**: Server-Sent Events and chunked responses
+- **Natural HTTP API**: HTTP verbs (GET, POST, PUT, DELETE, PATCH) with fluent request builders
 
 **Architecture**:
 ```java
-RestServiceClientImpl
+RestServiceClientImpl implements RestClient
 ├── WebClient (Spring WebFlux)
 ├── ConnectionProvider (Reactor Netty)
 ├── HttpClient (Reactor Netty)
 ├── CircuitBreakerManager
-└── RequestBuilderImpl<T>
+└── RestRequestBuilder<T> implements RestClient.RequestBuilder<T>
     ├── Path parameter substitution
-    ├── Query parameter handling  
+    ├── Query parameter handling
     ├── Header management
     └── Body serialization
 ```
@@ -93,25 +192,72 @@ RestServiceClientImpl
 
 **Location**: `com.firefly.common.client.impl.GrpcServiceClientImpl<T>`
 
-Built on gRPC Java libraries, this implementation provides:
+Implements `GrpcClient<T>` interface. Built on gRPC Java libraries, this implementation provides:
 
-- **Stub Management**: Type-safe gRPC stub handling
+- **Stub Management**: Type-safe gRPC stub handling with direct access
 - **Channel Management**: ManagedChannel lifecycle
 - **Metadata Propagation**: gRPC metadata handling
-- **Streaming Support**: Unary, client-streaming, server-streaming, bidirectional
-- **HTTP->gRPC Mapping**: Translates HTTP-style calls to gRPC methods
+- **Full Streaming Support**: Unary, client-streaming, server-streaming, bidirectional
+- **Native gRPC API**: Direct stub access and functional-style operation invocation
+- **Circuit Breaker Integration**: Automatic resilience for all operation types
 
 **Architecture**:
 ```java
-GrpcServiceClientImpl<T>
+GrpcServiceClientImpl<T> implements GrpcClient<T>
 ├── ManagedChannel (gRPC)
 ├── Stub<T> (Generated gRPC stub)
 ├── CircuitBreakerManager
-└── GrpcRequestBuilder<T>
-    ├── HTTP to gRPC method mapping
-    ├── Metadata handling
-    └── Stream processing
+└── Native gRPC operations
+    ├── unary() - Single request/response
+    ├── serverStream() - Server streaming
+    ├── clientStream() - Client streaming
+    ├── bidiStream() - Bidirectional streaming
+    └── execute/executeStream() - Generic operations
 ```
+
+#### SOAP Implementation (`SoapServiceClientImpl`)
+
+**Location**: `com.firefly.common.client.impl.SoapServiceClientImpl`
+
+Implements `SoapClient` interface. Built on Apache CXF JAX-WS libraries, this implementation provides:
+
+- **WSDL Parsing**: Automatic service discovery from WSDL without code generation
+- **Dynamic Invocation**: Runtime operation discovery and invocation
+- **WS-Security**: Username token authentication support
+- **MTOM/XOP**: Message Transmission Optimization Mechanism for binary data
+- **SSL/TLS Support**: Custom trust stores and client certificates
+- **Connection Pooling**: HTTP connection reuse and keep-alive
+- **SOAP Fault Mapping**: SOAP faults to domain exceptions
+- **Operation-Based API**: Natural SOAP operation invocation with fluent builders
+
+**Architecture**:
+```java
+SoapServiceClientImpl implements SoapClient
+├── Service (JAX-WS)
+├── Port (Dynamic proxy)
+├── HTTPConduit (Apache CXF)
+│   ├── HTTPClientPolicy (Timeouts, connection pooling)
+│   ├── TLSClientParameters (SSL/TLS configuration)
+│   └── WSS4JOutInterceptor (WS-Security)
+├── CircuitBreakerManager
+├── LoggingInterceptors (Request/response logging)
+└── SoapOperationBuilder implements SoapClient.OperationBuilder
+    ├── Operation name mapping
+    ├── JAXB marshalling/unmarshalling
+    ├── SOAP header handling
+    └── Fault processing
+```
+
+**Key Features**:
+
+- **WSDL URL Authentication**: Automatic credential extraction from WSDL URLs
+  ```
+  https://secure.example.com/service?WSDL&user=username&password=pass
+  ```
+- **Operation Discovery**: `getOperations()` returns list of available SOAP operations
+- **Schema Validation**: Optional XML schema validation
+- **Message Logging**: Configurable SOAP message logging for debugging
+- **Health Checks**: WSDL availability verification
 
 ### 3. Builder Pattern Layer
 
@@ -119,7 +265,7 @@ GrpcServiceClientImpl<T>
 
 **Location**: `com.firefly.common.client.builder.RestClientBuilder`
 
-Responsible for:
+Builds `RestClient` instances. Responsible for:
 - WebClient configuration and customization
 - Connection pool setup
 - Default header management
@@ -137,6 +283,7 @@ public class RestClientBuilder {
     RestClientBuilder xmlContentType();
     RestClientBuilder webClient(WebClient webClient);
     RestClientBuilder circuitBreakerManager(CircuitBreakerManager manager);
+    RestClient build();  // Returns RestClient
 }
 ```
 
@@ -144,7 +291,7 @@ public class RestClientBuilder {
 
 **Location**: `com.firefly.common.client.builder.GrpcClientBuilder<T>`
 
-Responsible for:
+Builds `GrpcClient<T>` instances. Responsible for:
 - ManagedChannel configuration
 - Stub factory setup
 - TLS/plaintext configuration
@@ -158,8 +305,46 @@ public class GrpcClientBuilder<T> {
     GrpcClientBuilder<T> timeout(Duration timeout);
     GrpcClientBuilder<T> usePlaintext();
     GrpcClientBuilder<T> useTransportSecurity();
-    GrpcClientBuilder<T> stubFactory(Function<Object, T> stubFactory);
+    GrpcClientBuilder<T> stubFactory(Function<ManagedChannel, T> stubFactory);
     GrpcClientBuilder<T> channel(ManagedChannel channel);
+    GrpcClientBuilder<T> circuitBreakerManager(CircuitBreakerManager manager);
+    GrpcClient<T> build();  // Returns GrpcClient<T>
+}
+```
+
+#### SoapClientBuilder
+
+**Location**: `com.firefly.common.client.builder.SoapClientBuilder`
+
+Builds `SoapClient` instances. Responsible for:
+- WSDL URL configuration with automatic credential extraction
+- Service and port QName selection
+- WS-Security configuration
+- SSL/TLS trust store and key store setup
+- MTOM enablement for binary attachments
+- Schema validation configuration
+- Custom SOAP properties and headers
+
+**Key Configuration Methods**:
+```java
+public class SoapClientBuilder {
+    SoapClientBuilder wsdlUrl(String wsdlUrl);
+    SoapClientBuilder serviceName(QName serviceName);
+    SoapClientBuilder portName(QName portName);
+    SoapClientBuilder timeout(Duration timeout);
+    SoapClientBuilder credentials(String username, String password);
+    SoapClientBuilder enableMtom();
+    SoapClientBuilder disableMtom();
+    SoapClientBuilder trustStore(String path, String password);
+    SoapClientBuilder keyStore(String path, String password);
+    SoapClientBuilder disableSslVerification();
+    SoapClientBuilder header(String name, String value);
+    SoapClientBuilder property(String name, Object value);
+    SoapClientBuilder endpointAddress(String address);
+    SoapClientBuilder enableSchemaValidation();
+    SoapClientBuilder disableSchemaValidation();
+    SoapClientBuilder circuitBreakerManager(CircuitBreakerManager manager);
+    SoapClient build();  // Returns SoapClient
 }
 ```
 
@@ -240,6 +425,16 @@ ServiceClientProperties
 │   ├── maxInboundMessageSize: int
 │   ├── usePlaintextByDefault: boolean
 │   └── compressionEnabled: boolean
+├── soap: Soap
+│   ├── defaultTimeout: Duration
+│   ├── connectionTimeout: Duration
+│   ├── receiveTimeout: Duration
+│   ├── mtomEnabled: boolean
+│   ├── schemaValidationEnabled: boolean
+│   ├── messageLoggingEnabled: boolean
+│   ├── maxMessageSize: int
+│   ├── wsAddressingEnabled: boolean
+│   └── wsSecurityEnabled: boolean
 ├── circuitBreaker: CircuitBreaker
 │   ├── enabled: boolean
 │   ├── failureRateThreshold: float
@@ -261,15 +456,20 @@ public void applyEnvironmentDefaults(Environment environment) {
             rest.loggingEnabled = true;
             rest.maxConnections = 50;
             grpc.usePlaintextByDefault = true;
+            soap.messageLoggingEnabled = true;
+            soap.schemaValidationEnabled = false;
             break;
         case TESTING:
             rest.maxConnections = 20;
             circuitBreaker.minimumNumberOfCalls = 2;
+            soap.schemaValidationEnabled = true;
             break;
         case PRODUCTION:
             rest.maxConnections = 200;
             rest.compressionEnabled = true;
             grpc.usePlaintextByDefault = false;
+            soap.messageLoggingEnabled = false;
+            soap.schemaValidationEnabled = true;
             break;
     }
 }
@@ -315,7 +515,9 @@ public GrpcClientBuilderFactory grpcClientBuilderFactory() {
 #### REST Request Pipeline
 
 ```
-Request Builder
+RestClient.get/post/put/delete/patch()
+     ↓
+RestClient.RequestBuilder
      ↓
 Path Parameter Substitution
      ↓
@@ -339,11 +541,11 @@ Result (Mono<T>/Flux<T>)
 #### gRPC Request Pipeline
 
 ```
-Request Builder
+GrpcClient.unary/serverStream/clientStream/bidiStream()
      ↓
-HTTP Method to gRPC Method Mapping
+Function<T, R> Operation
      ↓
-Metadata Addition
+Stub Access (getStub())
      ↓
 Message Serialization (Protobuf)
      ↓
@@ -356,6 +558,40 @@ Response Deserialization
 Error Handling/Mapping
      ↓
 Result (Mono<T>/Flux<T>)
+```
+
+#### SOAP Request Pipeline
+
+```
+SoapClient.invoke() or invokeAsync()
+     ↓
+SoapClient.OperationBuilder (optional)
+     ↓
+WSDL URL Credential Extraction
+     ↓
+Operation Name Resolution
+     ↓
+JAXB Object Marshalling
+     ↓
+SOAP Envelope Creation
+     ↓
+WS-Security Header Addition
+     ↓
+Custom Header Addition
+     ↓
+Circuit Breaker Check
+     ↓
+HTTP Conduit Execution (Apache CXF)
+     ↓
+SSL/TLS Handshake (if configured)
+     ↓
+SOAP Response Processing
+     ↓
+JAXB Object Unmarshalling
+     ↓
+SOAP Fault Handling/Mapping
+     ↓
+Result (Mono<T>)
 ```
 
 ## Threading Model
@@ -393,9 +629,15 @@ ManagedChannel channel = ManagedChannelBuilder.forTarget(address)
 ```java
 ServiceClientException (Base)
 ├── ServiceNotFoundException (404, NOT_FOUND)
-├── ServiceUnavailableException (503, UNAVAILABLE) 
+├── ServiceUnavailableException (503, UNAVAILABLE)
 ├── ServiceAuthenticationException (401, UNAUTHENTICATED)
 ├── ServiceValidationException (400, INVALID_ARGUMENT)
+├── SoapFaultException (SOAP Fault)
+│   ├── faultCode: String
+│   ├── faultString: String
+│   ├── faultActor: String
+│   └── faultDetail: String
+├── WsdlParsingException (WSDL parsing errors)
 └── CircuitBreakerException
     ├── CircuitBreakerOpenException
     └── CircuitBreakerTimeoutException
@@ -419,13 +661,49 @@ switch (statusCode.value()) {
 #### gRPC Error Mapping
 
 ```java
-// gRPC status codes to domain exceptions  
+// gRPC status codes to domain exceptions
 switch (status.getCode()) {
     case NOT_FOUND: throw new ServiceNotFoundException(...);
     case UNAVAILABLE: throw new ServiceUnavailableException(...);
     case UNAUTHENTICATED: throw new ServiceAuthenticationException(...);
     case INVALID_ARGUMENT: throw new ServiceValidationException(...);
     default: throw new ServiceClientException(...);
+}
+```
+
+#### SOAP Error Mapping
+
+```java
+// SOAP faults to domain exceptions
+try {
+    Object result = method.invoke(port, request);
+    return responseType.cast(result);
+} catch (SOAPFaultException e) {
+    String faultCode = e.getFault().getFaultCode();
+    String faultString = e.getFault().getFaultString();
+    String faultActor = e.getFault().getFaultActor();
+    String faultDetail = extractFaultDetail(e.getFault());
+
+    throw new SoapFaultException(faultCode, faultString, faultActor, faultDetail, e);
+} catch (Exception e) {
+    throw new ServiceClientException("SOAP operation failed", e);
+}
+```
+
+**SOAP Fault Helper Methods**:
+```java
+public class SoapFaultException extends ServiceClientException {
+    public boolean isClientFault() {
+        return faultCode != null && faultCode.contains("Client");
+    }
+
+    public boolean isServerFault() {
+        return faultCode != null && faultCode.contains("Server");
+    }
+
+    public boolean isVersionMismatchFault() {
+        return faultCode != null && faultCode.contains("VersionMismatch");
+    }
 }
 ```
 
@@ -520,8 +798,9 @@ public CircuitBreakerConfig customCircuitBreakerConfig() {
 
 - **REST**: Reactor Netty connection pool with configurable limits
 - **gRPC**: ManagedChannel with connection multiplexing
-- **Keep-Alive**: Configurable keep-alive for both protocols
-- **Compression**: Automatic compression for both REST and gRPC
+- **SOAP**: Apache CXF HTTP conduit with connection pooling and keep-alive
+- **Keep-Alive**: Configurable keep-alive for all protocols
+- **Compression**: Automatic compression for REST, gRPC, and SOAP
 
 ### Memory Usage
 

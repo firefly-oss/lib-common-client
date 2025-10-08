@@ -39,21 +39,21 @@ import reactor.test.StepVerifier;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
-    
+
     private MockWebServer mockWebServer;
-    private ServiceClient serviceClient;
+    private RestClient serviceClient;
     private UserService userService;
-    
+
     @BeforeEach
     void setUp() throws IOException {
         mockWebServer = new MockWebServer();
         mockWebServer.start();
-        
+
         serviceClient = ServiceClient.rest("user-service")
             .baseUrl(mockWebServer.url("/").toString())
             .timeout(Duration.ofSeconds(5))
             .build();
-            
+
         userService = new UserService(serviceClient);
     }
     
@@ -189,7 +189,7 @@ public class TestServiceClientConfig {
     
     @Bean
     @Primary
-    public ServiceClient testServiceClient() {
+    public RestClient testServiceClient() {
         return ServiceClient.rest("test-service")
             .baseUrl("http://localhost:8080")
             .timeout(Duration.ofSeconds(5))

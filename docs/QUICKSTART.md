@@ -36,7 +36,7 @@ This section walks you through creating your first service client step-by-step.
 
 Before creating a client, understand these key concepts:
 
-1. **Client Type**: Choose REST for HTTP services or gRPC for Protocol Buffer services
+1. **Client Type**: Choose REST for HTTP services, gRPC for Protocol Buffer services, or SOAP for WSDL-based services
 2. **Builder Pattern**: Use fluent API to configure your client
 3. **Reactive Programming**: All operations return `Mono<T>` or `Flux<T>` for non-blocking execution
 4. **Circuit Breaker**: Automatically enabled for resilience
@@ -54,7 +54,7 @@ import java.time.Duration;
 @Service
 public class UserService {
 
-    private final ServiceClient userClient;
+    private final RestClient userClient;
 
     // Constructor where we'll build our client
     public UserService() {
@@ -143,23 +143,21 @@ Make sure you've generated your gRPC stubs from `.proto` files. You should have:
 #### Step 2: Create the gRPC Client
 
 ```java
+import com.firefly.common.client.GrpcClient;
 import com.firefly.common.client.ServiceClient;
-import com.firefly.common.client.impl.GrpcServiceClientImpl;
 import com.example.grpc.PaymentServiceGrpc;
 import com.example.grpc.PaymentServiceGrpc.PaymentServiceStub;
 
 @Service
 public class PaymentService {
 
-    private final GrpcServiceClientImpl<PaymentServiceStub> paymentClient;
+    private final GrpcClient<PaymentServiceStub> paymentClient;
 
     public PaymentService() {
-        ServiceClient client = ServiceClient.grpc("payment-service", PaymentServiceStub.class)
+        this.paymentClient = ServiceClient.grpc("payment-service", PaymentServiceStub.class)
             .address("localhost:9090")                                      // REQUIRED: gRPC service address
             .stubFactory(channel -> PaymentServiceGrpc.newStub(channel))   // REQUIRED: How to create stub
             .build();
-
-        this.paymentClient = (GrpcServiceClientImpl<PaymentServiceStub>) client;
     }
 }
 ```
@@ -173,14 +171,12 @@ public class PaymentService {
 
 ```java
 public PaymentService() {
-    ServiceClient client = ServiceClient.grpc("payment-service", PaymentServiceStub.class)
+    this.paymentClient = ServiceClient.grpc("payment-service", PaymentServiceStub.class)
         .address("localhost:9090")
         .usePlaintext()                                                 // Disable TLS (dev only!)
         .timeout(Duration.ofSeconds(30))                                // Call timeout
         .stubFactory(channel -> PaymentServiceGrpc.newStub(channel))
         .build();
-
-    this.paymentClient = (GrpcServiceClientImpl<PaymentServiceStub>) client;
 }
 ```
 
@@ -274,6 +270,12 @@ firefly:
 | `stubFactory()` | Function | ✅ Yes | None | Creates gRPC stub |
 | `usePlaintext()` | - | No | false | Disable TLS |
 | `timeout()` | Duration | No | 30s | Call timeout |
+| **SOAP Client** |
+| `wsdlUrl()` | String | ✅ Yes | None | WSDL URL (can include credentials) |
+| `credentials()` | String, String | No | - | Username and password |
+| `timeout()` | Duration | No | 30s | Request timeout |
+| `enableMtom()` | - | No | false | Enable MTOM for attachments |
+| `trustStore()` | String, String | No | - | SSL trust store |
 
 ## Basic REST Client
 
@@ -286,16 +288,16 @@ import java.time.Duration;
 
 @Service
 public class UserService {
-    
-    private final ServiceClient userClient;
-    
+
+    private final RestClient userClient;
+
     public UserService() {
         this.userClient = ServiceClient.rest("user-service")
             .baseUrl("http://user-service:8080")
             .timeout(Duration.ofSeconds(30))
             .build();
     }
-    
+
     public Mono<User> getUser(String userId) {
         return userClient.get("/users/{id}", User.class)
             .withPathParam("id", userId)
@@ -327,6 +329,121 @@ public Mono<List<User>> searchUsers(String query, int limit) {
 }
 ```
 
+## Basic SOAP Client
+
+### Your First SOAP Client - Step by Step
+
+#### Step 1: Create a SOAP Service Class
+
+```java
+import com.firefly.common.client.ServiceClient;
+import reactor.core.publisher.Mono;
+import org.springframework.stereotype.Service;
+
+@Service
+public class PaymentGatewayService {
+
+    private final SoapClient paymentClient;
+
+    public PaymentGatewayService() {
+        // We'll add SOAP client configuration here
+    }
+}
+```
+
+#### Step 2: Build SOAP Client with WSDL URL
+
+```java
+public PaymentGatewayService() {
+    // Many SOAP services (like PayNet) include credentials in WSDL URL
+    this.paymentClient = ServiceClient.soap("payment-gateway")
+        .wsdlUrl("https://secure.paynetonline.com/direct/PayNetDirect.asmx?WSDL&user=username&password=pass")
+        .build();
+}
+```
+
+**What this does:**
+- `soap("payment-gateway")`: Creates a SOAP client named "payment-gateway"
+- `wsdlUrl(...)`: **Required** - The WSDL URL (credentials are automatically extracted)
+- Credentials in URL are automatically used for WS-Security authentication
+- The WSDL is parsed to discover available operations
+
+#### Step 3: Alternative - Separate Credentials
+
+```java
+public PaymentGatewayService() {
+    // Or provide credentials separately
+    this.paymentClient = ServiceClient.soap("payment-gateway")
+        .wsdlUrl("https://secure.example.com/service.asmx?WSDL")
+        .credentials("username", "password")
+        .timeout(Duration.ofSeconds(60))
+        .build();
+}
+```
+
+#### Step 4: Make a SOAP Request
+
+```java
+public Mono<PaymentResponse> processPayment(PaymentRequest request) {
+    return paymentClient.invokeAsync("ProcessPayment", request, PaymentResponse.class)
+        .doOnSuccess(response ->
+            log.info("Payment processed: {}", response.getTransactionId()))
+        .doOnError(error ->
+            log.error("Payment failed: {}", error.getMessage()));
+}
+```
+
+**SOAP request explained:**
+- `post("ProcessPayment", PaymentResponse.class)`: Call SOAP operation, expect PaymentResponse
+- `withBody(request)`: The SOAP request object (JAXB-annotated class)
+- `execute()`: Send the SOAP request and return reactive `Mono<PaymentResponse>`
+
+### SOAP Client with SSL/TLS
+
+For production services with SSL certificates:
+
+```java
+@Service
+public class SecureBankingService {
+
+    private final SoapClient bankingClient;
+
+    public SecureBankingService(
+            @Value("${banking.wsdl.url}") String wsdlUrl,
+            @Value("${banking.username}") String username,
+            @Value("${banking.password}") String password,
+            @Value("${ssl.truststore.path}") String trustStorePath,
+            @Value("${ssl.truststore.password}") String trustStorePassword) {
+
+        this.bankingClient = ServiceClient.soap("banking-service")
+            .wsdlUrl(wsdlUrl)
+            .credentials(username, password)
+            .trustStore(trustStorePath, trustStorePassword)
+            .timeout(Duration.ofSeconds(30))
+            .enableSchemaValidation()
+            .build();
+    }
+
+    public Mono<AccountBalance> getAccountBalance(String accountNumber) {
+        BalanceRequest request = new BalanceRequest();
+        request.setAccountNumber(accountNumber);
+
+        return bankingClient.invokeAsync("GetAccountBalance", request, AccountBalance.class);
+    }
+}
+```
+
+### SOAP Client for Development (Self-Signed Certificates)
+
+```java
+// ⚠️ Development only - disables SSL verification
+ServiceClient devClient = ServiceClient.soap("dev-service")
+    .wsdlUrl("https://dev.example.com/service?wsdl")
+    .credentials("devuser", "devpass")
+    .disableSslVerification()  // Only for dev/test!
+    .build();
+```
+
 ## Basic gRPC Client
 
 ### gRPC Client Setup
@@ -340,9 +457,9 @@ import com.example.grpc.PaymentServiceGrpc.PaymentServiceStub;
 
 @Service
 public class PaymentService {
-    
-    private final ServiceClient paymentClient;
-    
+
+    private final GrpcClient<PaymentServiceStub> paymentClient;
+
     public PaymentService() {
         this.paymentClient = ServiceClient.grpc("payment-service", PaymentServiceStub.class)
             .address("payment-service:9090")
@@ -357,17 +474,17 @@ public class PaymentService {
 ### Using gRPC Client
 
 ```java
-import com.firefly.common.client.impl.GrpcServiceClientImpl;
-
 public Mono<PaymentResponse> processPayment(PaymentRequest request) {
-    GrpcServiceClientImpl<PaymentServiceStub> grpcClient = 
-        (GrpcServiceClientImpl<PaymentServiceStub>) paymentClient;
-    
-    return grpcClient.executeWithCircuitBreaker(
-        Mono.fromCallable(() -> {
-            // Synchronous gRPC call wrapped in Mono
-            return grpcClient.getStub().processPayment(request);
-        })
+    // Use native gRPC unary operation
+    return paymentClient.unary(stub -> stub.processPayment(request));
+}
+
+// For streaming operations
+public Flux<PaymentNotification> streamPaymentNotifications(String accountId) {
+    return paymentClient.serverStream(stub ->
+        stub.streamNotifications(AccountRequest.newBuilder()
+            .setAccountId(accountId)
+            .build())
     );
 }
 ```
@@ -399,7 +516,7 @@ firefly:
       max-in-memory-size: 1048576  # 1MB
       max-retries: 3
     
-    # gRPC Configuration  
+    # gRPC Configuration
     grpc:
       keep-alive-time: 5m
       keep-alive-timeout: 30s
@@ -411,6 +528,18 @@ firefly:
       use-plaintext-by-default: true
       compression-enabled: true
       max-concurrent-streams: 100
+
+    # SOAP Configuration
+    soap:
+      default-timeout: 30s               # Default SOAP request timeout
+      connection-timeout: 10s            # Connection establishment timeout
+      receive-timeout: 30s               # Response receive timeout
+      mtom-enabled: false                # Enable MTOM for attachments
+      schema-validation-enabled: true    # Validate XML against schema
+      message-logging-enabled: false     # Log SOAP messages (dev only)
+      max-message-size: 10485760         # 10MB max message size
+      ws-addressing-enabled: false       # Enable WS-Addressing
+      ws-security-enabled: false         # Enable WS-Security
     
     # Circuit Breaker Configuration
     circuit-breaker:
@@ -438,7 +567,7 @@ firefly:
 public class ServiceClientConfig {
     
     @Bean
-    public ServiceClient customerServiceClient() {
+    public RestClient customerServiceClient() {
         return ServiceClient.rest("customer-service")
             .baseUrl("http://customer-service:8080")
             .timeout(Duration.ofSeconds(30))
@@ -446,13 +575,27 @@ public class ServiceClientConfig {
             .jsonContentType()
             .build();
     }
-    
-    @Bean  
-    public ServiceClient notificationServiceClient() {
+
+    @Bean
+    public GrpcClient<NotificationServiceStub> notificationServiceClient() {
         return ServiceClient.grpc("notification-service", NotificationServiceStub.class)
             .address("notification-service:9090")
             .usePlaintext()
             .stubFactory(channel -> NotificationServiceGrpc.newStub(channel))
+            .build();
+    }
+
+    @Bean
+    public SoapClient paymentGatewayClient(
+            @Value("${payment.wsdl.url}") String wsdlUrl,
+            @Value("${payment.username}") String username,
+            @Value("${payment.password}") String password) {
+
+        return ServiceClient.soap("payment-gateway")
+            .wsdlUrl(wsdlUrl)
+            .credentials(username, password)
+            .timeout(Duration.ofSeconds(60))
+            .enableMtom()
             .build();
     }
 }
@@ -509,18 +652,34 @@ public class CustomCircuitBreakerConfig {
 ```java
 @Component
 public class ServiceHealthChecker {
-    
-    private final ServiceClient serviceClient;
-    
+
+    private final RestClient serviceClient;
+
     public Mono<Boolean> checkServiceHealth() {
         return serviceClient.healthCheck()
             .map(v -> true)
             .onErrorReturn(false);
     }
-    
+
     public boolean isServiceReady() {
         return serviceClient.isReady();
     }
+}
+```
+
+**SOAP Health Checks:**
+SOAP clients perform comprehensive health checks including:
+- WSDL availability verification
+- HTTP connectivity test
+- Circuit breaker status
+
+```java
+@Scheduled(fixedRate = 60000)  // Every minute
+public void checkSoapServiceHealth() {
+    soapClient.healthCheck()
+        .doOnSuccess(v -> log.info("SOAP service is healthy"))
+        .doOnError(e -> log.error("SOAP service health check failed", e))
+        .subscribe();
 }
 ```
 
@@ -629,11 +788,11 @@ class ServiceClientIntegrationTest {
 ```java
 @Service
 public class OrderServiceFacade {
-    
-    private final ServiceClient customerService;
-    private final ServiceClient inventoryService;
-    private final ServiceClient paymentService;
-    
+
+    private final RestClient customerService;
+    private final RestClient inventoryService;
+    private final RestClient paymentService;
+
     public Mono<OrderSummary> createOrder(CreateOrderRequest request) {
         return validateCustomer(request.getCustomerId())
             .then(checkInventory(request.getItems()))

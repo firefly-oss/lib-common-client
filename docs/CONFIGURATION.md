@@ -398,9 +398,9 @@ public class CustomCircuitBreakerConfig {
 ```java
 @Configuration
 public class CustomRestClientConfig {
-    
+
     @Bean
-    public ServiceClient customServiceClient() {
+    public RestClient customServiceClient() {
         return ServiceClient.rest("custom-service")
             .baseUrl("https://api.example.com")
             .timeout(Duration.ofSeconds(45))
@@ -446,7 +446,7 @@ firefly:
 @Service
 public class UserServiceClient {
 
-    private final ServiceClient client;
+    private final RestClient client;
 
     public UserServiceClient() {
         this.client = ServiceClient.rest("user-service")
@@ -495,7 +495,7 @@ public class ServiceClientsConfig {
     private String authToken;
 
     @Bean
-    public ServiceClient userServiceClient() {
+    public RestClient userServiceClient() {
         return ServiceClient.rest("user-service")
             .baseUrl("http://user-service:8080")
             .defaultHeader("Authorization", "Bearer " + authToken)
@@ -504,7 +504,7 @@ public class ServiceClientsConfig {
     }
 
     @Bean
-    public ServiceClient orderServiceClient() {
+    public RestClient orderServiceClient() {
         return ServiceClient.rest("order-service")
             .baseUrl("http://order-service:8080")
             .defaultHeader("Authorization", "Bearer " + authToken)
@@ -514,7 +514,7 @@ public class ServiceClientsConfig {
     }
 
     @Bean
-    public ServiceClient inventoryServiceClient() {
+    public RestClient inventoryServiceClient() {
         return ServiceClient.rest("inventory-service")
             .baseUrl("http://inventory-service:8080")
             .defaultHeader("Authorization", "Bearer " + authToken)
@@ -613,7 +613,7 @@ public class MixedServiceConfig {
 
     // REST client for user service
     @Bean
-    public ServiceClient userRestClient() {
+    public RestClient userRestClient() {
         return ServiceClient.rest("user-service")
             .baseUrl("http://localhost:8080")
             .jsonContentType()
@@ -622,7 +622,7 @@ public class MixedServiceConfig {
 
     // gRPC client for payment service
     @Bean
-    public ServiceClient paymentGrpcClient() {
+    public GrpcClient<PaymentServiceStub> paymentGrpcClient() {
         return ServiceClient.grpc("payment-service", PaymentServiceStub.class)
             .address("localhost:9090")
             .usePlaintext()

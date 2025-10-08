@@ -2,7 +2,9 @@
 
 ## Overview
 
-The Firefly SOAP Client provides a modern, reactive API for consuming SOAP/WSDL web services with best-in-class developer experience. It wraps traditional JAX-WS and Apache CXF functionality in a fluent, type-safe interface that integrates seamlessly with the rest of the ServiceClient framework.
+The Firefly SOAP Client provides a modern, reactive API for consuming SOAP/WSDL web services with best-in-class developer experience. It wraps traditional JAX-WS and Apache CXF functionality in a fluent, type-safe `SoapClient` interface that provides natural SOAP operation invocation.
+
+**Key Design**: The `SoapClient` interface extends `ServiceClient` and provides SOAP-specific methods like `invoke()`, `invokeAsync()`, and `getOperations()` for natural SOAP service interaction.
 
 ## Key Features
 
@@ -20,27 +22,39 @@ The Firefly SOAP Client provides a modern, reactive API for consuming SOAP/WSDL 
 ### Basic SOAP Client
 
 ```java
+import com.firefly.common.client.SoapClient;
 import com.firefly.common.client.ServiceClient;
 import reactor.core.publisher.Mono;
 
 // Create a simple SOAP client
-ServiceClient client = ServiceClient.soap("weather-service")
+SoapClient client = ServiceClient.soap("weather-service")
     .wsdlUrl("http://www.webservicex.net/globalweather.asmx?WSDL")
     .build();
 
 // Invoke an operation
-Mono<WeatherResponse> response = client.post("GetWeather", WeatherResponse.class)
-    .withBody(weatherRequest)
-    .execute();
+Mono<WeatherResponse> response = client.invokeAsync("GetWeather", weatherRequest, WeatherResponse.class);
+```
+
+### SOAP Client with WSDL URL Authentication
+
+Many SOAP services (like PayNet) embed credentials in the WSDL URL:
+
+```java
+// Automatic credential extraction from WSDL URL
+SoapClient client = ServiceClient.soap("payment-service")
+    .wsdlUrl("https://secure.paynetonline.com/direct/PayNetDirect.asmx?WSDL&user=username&password=pass")
+    .build();
+
+// Credentials are automatically extracted and used for WS-Security
+// The WSDL URL is cleaned for security (credentials removed from logs)
 ```
 
 ### SOAP Client with Authentication
 
 ```java
-ServiceClient client = ServiceClient.soap("secure-service")
+SoapClient client = ServiceClient.soap("secure-service")
     .wsdlUrl("https://secure.example.com/service?wsdl")
-    .username("api-user")
-    .password("secret-password")
+    .credentials("api-user", "secret-password")
     .timeout(Duration.ofSeconds(30))
     .build();
 ```
@@ -50,7 +64,7 @@ ServiceClient client = ServiceClient.soap("secure-service")
 ```java
 import javax.xml.namespace.QName;
 
-ServiceClient client = ServiceClient.soap("payment-service")
+SoapClient client = ServiceClient.soap("payment-service")
     .wsdlUrl("http://example.com/payment?wsdl")
     .serviceName(new QName("http://example.com/", "PaymentService"))
     .portName(new QName("http://example.com/", "PaymentPort"))
@@ -83,6 +97,9 @@ ServiceClient client = ServiceClient.soap("payment-service")
 | `enableSchemaValidation()` | Enable XML schema validation | Enabled |
 | `disableSchemaValidation()` | Disable schema validation | Enabled |
 | `circuitBreakerManager(...)` | Set circuit breaker manager | None |
+| `trustStore(String, String)` | Set SSL trust store | None |
+| `keyStore(String, String)` | Set SSL key store for client auth | None |
+| `disableSslVerification()` | Disable SSL verification (dev only) | Enabled |
 
 ### Application Properties
 
@@ -113,7 +130,7 @@ firefly:
 @Service
 public class CalculatorService {
     
-    private final ServiceClient calculatorClient;
+    private final SoapClient calculatorClient;
     
     public CalculatorService() {
         this.calculatorClient = ServiceClient.soap("calculator")
@@ -125,11 +142,17 @@ public class CalculatorService {
         AddRequest request = new AddRequest();
         request.setIntA(a);
         request.setIntB(b);
-        
-        return calculatorClient.post("Add", AddResponse.class)
-            .withBody(request)
-            .execute()
+
+        return calculatorClient.invokeAsync("Add", request, AddResponse.class)
             .map(AddResponse::getAddResult);
+    }
+
+    // Alternative: Using fluent builder
+    public Mono<Integer> multiply(int a, int b) {
+        return calculatorClient.invoke("Multiply")
+            .withParameter("intA", a)
+            .withParameter("intB", b)
+            .execute(Integer.class);
     }
 }
 ```
@@ -140,7 +163,7 @@ public class CalculatorService {
 @Service
 public class DocumentService {
     
-    private final ServiceClient documentClient;
+    private final SoapClient documentClient;
     
     public DocumentService() {
         this.documentClient = ServiceClient.soap("document-service")
@@ -154,10 +177,8 @@ public class DocumentService {
         UploadRequest request = new UploadRequest();
         request.setFileName(fileName);
         request.setContent(content);
-        
-        return documentClient.post("UploadDocument", UploadResponse.class)
-            .withBody(request)
-            .execute()
+
+        return documentClient.invokeAsync("UploadDocument", request, UploadResponse.class)
             .map(UploadResponse::getDocumentId);
     }
 }
@@ -176,7 +197,7 @@ public class SoapClientConfig {
     private String password;
     
     @Bean
-    public ServiceClient paymentServiceClient() {
+    public SoapClient paymentServiceClient() {
         return ServiceClient.soap("payment-service")
             .wsdlUrl("https://secure.example.com/payment?wsdl")
             .credentials(username, password)
@@ -195,7 +216,7 @@ public class SoapClientConfig {
 public class ProductionSoapConfig {
     
     @Bean
-    public ServiceClient orderServiceClient() {
+    public SoapClient orderServiceClient() {
         return ServiceClient.soap("order-service")
             .wsdlUrl("http://dev.example.com/orders?wsdl")  // Dev WSDL
             .endpointAddress("https://prod.example.com/orders")  // Prod endpoint
@@ -212,7 +233,7 @@ public class ProductionSoapConfig {
 @Service
 public class ResilientSoapService {
     
-    private final ServiceClient soapClient;
+    private final SoapClient soapClient;
     private final CircuitBreakerManager circuitBreakerManager;
     
     public ResilientSoapService(CircuitBreakerManager circuitBreakerManager) {
@@ -225,9 +246,7 @@ public class ResilientSoapService {
     }
     
     public Mono<Response> callExternalService(Request request) {
-        return soapClient.post("ProcessRequest", Response.class)
-            .withBody(request)
-            .execute()
+        return soapClient.invokeAsync("ProcessRequest", request, Response.class)
             .doOnError(error -> log.error("Service call failed", error))
             .onErrorResume(error -> Mono.just(createFallbackResponse()));
     }
@@ -241,13 +260,12 @@ public class ResilientSoapService {
 ```java
 import com.firefly.common.client.exception.SoapFaultException;
 
-soapClient.post("ValidateData", ValidationResponse.class)
-    .withBody(request)
-    .execute()
+ValidationRequest request = new ValidationRequest();
+soapClient.invokeAsync("ValidateData", request, ValidationResponse.class)
     .onErrorResume(error -> {
         if (error instanceof SoapFaultException) {
             SoapFaultException soapFault = (SoapFaultException) error;
-            
+
             if (soapFault.isClientFault()) {
                 log.warn("Client error: {}", soapFault.getFaultString());
                 return Mono.error(new ValidationException(soapFault.getFaultString()));
@@ -266,12 +284,101 @@ soapClient.post("ValidateData", ValidationResponse.class)
 import com.firefly.common.client.exception.WsdlParsingException;
 
 try {
-    ServiceClient client = ServiceClient.soap("service")
+    SoapClient client = ServiceClient.soap("service")
         .wsdlUrl("http://invalid-wsdl-url")
         .build();
 } catch (WsdlParsingException e) {
     log.error("Failed to parse WSDL: {}", e.getMessage());
     // Handle WSDL parsing failure
+}
+```
+
+### Example 6: PayNet Payment Gateway Integration
+
+```java
+@Service
+public class PayNetPaymentService {
+
+    private final SoapClient payNetClient;
+
+    public PayNetPaymentService(
+            @Value("${paynet.username}") String username,
+            @Value("${paynet.password}") String password) {
+
+        // PayNet requires credentials in WSDL URL
+        String wsdlUrl = String.format(
+            "https://secure.paynetonline.com/direct/PayNetDirect.asmx?WSDL&user=%s&password=%s",
+            username, password);
+
+        this.payNetClient = ServiceClient.soap("paynet-payment")
+            .wsdlUrl(wsdlUrl)
+            .timeout(Duration.ofSeconds(60))
+            .enableMtom()
+            .header("X-Merchant-ID", "${paynet.merchant.id}")
+            .build();
+    }
+
+    public Mono<PaymentResponse> processPayment(PaymentRequest request) {
+        return payNetClient.invokeAsync("ProcessPayment", request, PaymentResponse.class)
+            .doOnSuccess(response ->
+                log.info("Payment processed: {}", response.getTransactionId()))
+            .doOnError(error ->
+                log.error("Payment failed: {}", error.getMessage()));
+    }
+}
+```
+
+### Example 7: Secure Banking Service with SSL
+
+```java
+@Configuration
+public class BankingServiceConfig {
+
+    @Bean
+    public SoapClient bankingServiceClient(
+            @Value("${banking.wsdl.url}") String wsdlUrl,
+            @Value("${banking.username}") String username,
+            @Value("${banking.password}") String password,
+            @Value("${ssl.truststore.path}") String trustStorePath,
+            @Value("${ssl.truststore.password}") String trustStorePassword,
+            @Value("${ssl.keystore.path}") String keyStorePath,
+            @Value("${ssl.keystore.password}") String keyStorePassword) {
+
+        return ServiceClient.soap("banking-service")
+            .wsdlUrl(wsdlUrl)
+            .credentials(username, password)
+            .trustStore(trustStorePath, trustStorePassword)
+            .keyStore(keyStorePath, keyStorePassword)
+            .timeout(Duration.ofSeconds(30))
+            .enableSchemaValidation()
+            .header("X-Bank-ID", "${banking.bank.id}")
+            .build();
+    }
+}
+```
+
+### Example 8: Government Service with Long Timeout
+
+```java
+@Service
+public class TaxFilingService {
+
+    private final SoapClient taxServiceClient;
+
+    public TaxFilingService() {
+        // Government services often have credentials in WSDL URL
+        this.taxServiceClient = ServiceClient.soap("tax-service")
+            .wsdlUrl("https://tax.gov.example.com/TaxService.asmx?WSDL&user=taxpayer123&password=secret")
+            .timeout(Duration.ofMinutes(5))  // Government services can be slow
+            .enableMtom()  // For document uploads
+            .enableSchemaValidation()
+            .build();
+    }
+
+    public Mono<FilingResponse> submitTaxReturn(TaxReturn taxReturn) {
+        return taxServiceClient.invokeAsync("SubmitReturn", taxReturn, FilingResponse.class)
+            .timeout(Duration.ofMinutes(10));  // Override for this operation
+    }
 }
 ```
 
@@ -282,7 +389,7 @@ try {
 ```java
 // ✅ Good - Create once, reuse many times
 @Bean
-public ServiceClient weatherClient() {
+public SoapClient weatherClient() {
     return ServiceClient.soap("weather")
         .wsdlUrl("http://example.com/weather?wsdl")
         .build();
@@ -290,7 +397,7 @@ public ServiceClient weatherClient() {
 
 // ❌ Bad - Creating new client for each request
 public Mono<Weather> getWeather() {
-    ServiceClient client = ServiceClient.soap("weather")
+    SoapClient client = ServiceClient.soap("weather")
         .wsdlUrl("http://example.com/weather?wsdl")
         .build();
     // ...
@@ -301,13 +408,13 @@ public Mono<Weather> getWeather() {
 
 ```java
 // For quick operations
-ServiceClient quickService = ServiceClient.soap("quick-service")
+SoapClient quickService = ServiceClient.soap("quick-service")
     .wsdlUrl("...")
     .timeout(Duration.ofSeconds(5))
     .build();
 
 // For long-running operations
-ServiceClient batchService = ServiceClient.soap("batch-service")
+SoapClient batchService = ServiceClient.soap("batch-service")
     .wsdlUrl("...")
     .timeout(Duration.ofMinutes(5))
     .build();
@@ -317,7 +424,7 @@ ServiceClient batchService = ServiceClient.soap("batch-service")
 
 ```java
 // Enable MTOM when transferring files or large binary data
-ServiceClient fileService = ServiceClient.soap("file-service")
+SoapClient fileService = ServiceClient.soap("file-service")
     .wsdlUrl("...")
     .enableMtom()
     .build();
@@ -339,6 +446,52 @@ firefly:
     soap:
       message-logging-enabled: false
       schema-validation-enabled: true
+```
+
+### 5. Secure Credential Management
+
+```java
+// ✅ Good - Use environment variables or secrets management
+SoapClient client = ServiceClient.soap("payment-service")
+    .wsdlUrl(String.format(
+        "https://secure.example.com/service?WSDL&user=%s&password=%s",
+        System.getenv("SOAP_USERNAME"),
+        System.getenv("SOAP_PASSWORD")))
+    .build();
+
+// ❌ Bad - Hardcoded credentials
+SoapClient client = ServiceClient.soap("payment-service")
+    .wsdlUrl("https://secure.example.com/service?WSDL&user=admin&password=password123")
+    .build();
+```
+
+### 6. SSL/TLS Configuration
+
+```java
+// ✅ Good - Proper SSL configuration for production
+SoapClient client = ServiceClient.soap("secure-service")
+    .wsdlUrl("https://secure.example.com/service?wsdl")
+    .trustStore("/etc/ssl/truststore.jks", trustStorePassword)
+    .keyStore("/etc/ssl/keystore.jks", keyStorePassword)
+    .build();
+
+// ⚠️ Acceptable for development only
+SoapClient devClient = ServiceClient.soap("dev-service")
+    .wsdlUrl("https://dev.example.com/service?wsdl")
+    .disableSslVerification()  // Only for dev/test!
+    .build();
+```
+
+### 7. Health Checks and Monitoring
+
+```java
+@Scheduled(fixedRate = 60000)  // Every minute
+public void checkSoapServiceHealth() {
+    soapClient.healthCheck()
+        .doOnSuccess(v -> log.info("SOAP service is healthy"))
+        .doOnError(e -> log.error("SOAP service health check failed", e))
+        .subscribe();
+}
 ```
 
 ## Troubleshooting
@@ -386,15 +539,14 @@ PaymentResponse response = port.processPayment(request);
 
 ```java
 // No stub generation needed
-ServiceClient client = ServiceClient.soap("payment-service")
+SoapClient client = ServiceClient.soap("payment-service")
     .wsdlUrl("http://example.com/payment?wsdl")
     .endpointAddress(endpoint)
     .build();
 
 // Reactive call
-Mono<PaymentResponse> response = client.post("ProcessPayment", PaymentResponse.class)
-    .withBody(request)
-    .execute();
+PaymentRequest request = new PaymentRequest();
+Mono<PaymentResponse> response = client.invokeAsync("ProcessPayment", request, PaymentResponse.class);
 ```
 
 ## Next Steps
