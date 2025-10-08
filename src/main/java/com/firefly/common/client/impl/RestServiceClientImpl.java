@@ -19,8 +19,11 @@ package com.firefly.common.client.impl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.firefly.common.client.ClientType;
-import com.firefly.common.client.ServiceClient;
+import com.firefly.common.client.RestClient;
+import com.firefly.common.client.exception.HttpErrorMapper;
 import com.firefly.common.client.exception.ServiceClientException;
+import com.firefly.common.client.exception.ServiceSerializationException;
+import com.firefly.common.client.exception.ErrorContext;
 import com.firefly.common.resilience.CircuitBreakerManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -28,7 +31,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -51,7 +56,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @since 2.0.0
  */
 @Slf4j
-public class RestServiceClientImpl implements ServiceClient {
+public class RestServiceClientImpl implements RestClient {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -219,7 +224,7 @@ public class RestServiceClientImpl implements ServiceClient {
     // Inner RequestBuilder Implementation
     // ========================================
 
-    private class RestRequestBuilder<R> implements RequestBuilder<R> {
+    private class RestRequestBuilder<R> implements RestClient.RequestBuilder<R> {
         private final String method;
         private final String endpoint;
         private final Class<R> responseType;
@@ -392,23 +397,55 @@ public class RestServiceClientImpl implements ServiceClient {
 
         @SuppressWarnings("unchecked")
         private Mono<R> executeRequest(WebClient.RequestHeadersSpec<?> requestSpec) {
-            Mono<R> baseRequest;
+            // Generate request ID for tracking
+            String requestId = UUID.randomUUID().toString();
+            Instant startTime = Instant.now();
 
-            if (responseType != null) {
-                baseRequest = requestSpec.retrieve().bodyToMono(responseType);
-            } else if (typeReference != null) {
-                // For TypeReference, use shared ObjectMapper instance
-                baseRequest = requestSpec.retrieve().bodyToMono(String.class)
-                    .map(json -> {
-                        try {
-                            return OBJECT_MAPPER.readValue(json, typeReference);
-                        } catch (Exception e) {
-                            throw new ServiceClientException("Failed to deserialize response: " + e.getMessage(), e);
-                        }
-                    });
-            } else {
-                throw new IllegalStateException("Either responseType or typeReference must be provided");
-            }
+            // Add request ID header
+            requestSpec.header("X-Request-ID", requestId);
+
+            Mono<R> baseRequest = requestSpec.exchangeToMono(response -> {
+                if (response.statusCode().isError()) {
+                    // Map error response to typed exception
+                    return HttpErrorMapper.mapHttpError(
+                        response,
+                        serviceName,
+                        endpoint,
+                        method,
+                        requestId,
+                        startTime
+                    ).flatMap(Mono::error);
+                }
+
+                // Success response - deserialize
+                if (responseType != null) {
+                    return response.bodyToMono(responseType);
+                } else if (typeReference != null) {
+                    // For TypeReference, use shared ObjectMapper instance
+                    return response.bodyToMono(String.class)
+                        .map(json -> {
+                            try {
+                                return OBJECT_MAPPER.readValue(json, typeReference);
+                            } catch (Exception e) {
+                                ErrorContext context = ErrorContext.builder()
+                                    .serviceName(serviceName)
+                                    .endpoint(endpoint)
+                                    .method(method)
+                                    .clientType(ClientType.REST)
+                                    .requestId(requestId)
+                                    .elapsedTime(Duration.between(startTime, Instant.now()))
+                                    .build();
+                                throw new ServiceSerializationException(
+                                    "Failed to deserialize response: " + e.getMessage(),
+                                    json,
+                                    context,
+                                    e);
+                            }
+                        });
+                } else {
+                    throw new IllegalStateException("Either responseType or typeReference must be provided");
+                }
+            });
 
             // Apply circuit breaker protection
             return applyCircuitBreakerProtection(baseRequest);
