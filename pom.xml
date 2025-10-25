@@ -81,6 +81,22 @@
             <artifactId>zipkin-reporter-brave</artifactId>
         </dependency>
 
+        <!-- OpenTelemetry for advanced tracing -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-zipkin</artifactId>
+        </dependency>
+
+        <!-- Micrometer Registry for Prometheus -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
         <!-- Logback JSON Encoder -->
         <dependency>
             <groupId>net.logstash.logback</groupId>

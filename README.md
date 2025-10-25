@@ -27,14 +27,36 @@ A comprehensive, reactive service communication framework for microservice archi
 - **🔌 Interceptors**: Extensible request/response processing pipeline
 - **⚙️ Auto-Configuration**: Zero-config Spring Boot integration
 - **🌍 Environment Profiles**: Development, testing, and production optimizations
-- **🔐 Security**: Authentication, authorization, and TLS support
-- **🧪 Testing Support**: Comprehensive testing utilities and mocks
+- **🔐 Security**: Certificate pinning, mTLS, API key management, JWT validation, secrets encryption
+- **🧪 Testing Support**: Comprehensive testing utilities, mocks, and WireMock integration
+- **🎭 Chaos Engineering**: Fault injection for resilience testing (latency, errors, timeouts) ⭐ **NEW**
+- **💾 HTTP Caching**: ETag-based validation, Cache-Control directives, TTL expiration ⭐ **NEW**
+- **🔍 Service Discovery**: Kubernetes, Eureka, Consul, static configuration support ⭐ **NEW**
+- **🔄 Request Deduplication**: Idempotency keys and request fingerprinting ⭐ **NEW**
+- **⚖️ Load Balancing**: Round Robin, Weighted, Least Connections, Sticky Session, Zone-Aware ⭐ **NEW**
+- **🪝 Webhook Client**: Event-driven integrations with signature verification ⭐ **NEW**
+- **🔌 Plugin System**: Extensible SPI for custom functionality ⭐ **NEW**
+
+### Enterprise Helpers
+- **🔷 GraphQL Client**: Query caching, automatic retry, batch operations, Java Time API support
+- **🔑 OAuth2 Client**: Multi-scope token caching, automatic refresh, retry with exponential backoff
+- **📤 Multipart Upload**: Progress tracking, chunked uploads, parallel uploads, file validation
+- **🔌 WebSocket Client**: Automatic reconnection, heartbeat, message queuing, binary support
+
+### Observability & Security
+- **📊 Performance Metrics**: Request tracking, latency monitoring, throughput analysis
+- **🏥 Health Indicators**: Spring Boot Actuator integration, service health monitoring
+- **🔒 Certificate Pinning**: SHA-256 hash validation to prevent MITM attacks
+- **🔐 Rate Limiting**: Client-side rate limiting with Token Bucket, Fixed Window, Sliding Window strategies
 
 ## 📋 Table of Contents
 
 - [Quick Start](#-quick-start)
 - [Installation](#-installation)
 - [Basic Usage](#-basic-usage)
+- [Enterprise Helpers](#-enterprise-helpers)
+- [Security Features](#-security-features)
+- [Observability](#-observability)
 - [Configuration](#-configuration)
 - [Advanced Features](#-advanced-features)
 - [Architecture](#-architecture)
@@ -44,6 +66,8 @@ A comprehensive, reactive service communication framework for microservice archi
 - [About Firefly Software Solutions Inc](#-about-firefly-software-solutions-inc)
 
 ---
+
+
 ## 🚀 Quick Start
 
 ### Installation
@@ -102,7 +126,7 @@ public class UserService {
             .withHeader("X-Request-ID", UUID.randomUUID().toString())
             .execute();
     }
-    
+
     public Flux<User> searchUsers(String query) {
         return userClient.get("/users/search", new TypeReference<List<User>>() {})
             .withQueryParam("q", query)
@@ -458,6 +482,389 @@ public class PaymentService {
 }
 ```
 
+## 🚀 Enterprise Helpers
+
+The library includes production-ready helpers for common integration patterns.
+
+### GraphQL Client Helper
+
+Enterprise-grade GraphQL client with caching, retry, and batch operations:
+
+```java
+import com.firefly.common.client.graphql.GraphQLClientHelper;
+import com.firefly.common.client.graphql.GraphQLConfig;
+
+@Service
+public class GraphQLService {
+
+    private final GraphQLClientHelper graphql;
+
+    public GraphQLService() {
+        GraphQLConfig config = GraphQLConfig.builder()
+            .timeout(Duration.ofSeconds(30))
+            .enableCache(true)
+            .cacheExpiration(Duration.ofMinutes(5))
+            .enableRetry(true)
+            .maxRetries(3)
+            .build();
+
+        this.graphql = new GraphQLClientHelper(
+            "https://api.example.com/graphql",
+            config
+        );
+    }
+
+    public User getUser(String userId) {
+        String query = """
+            query GetUser($id: ID!) {
+                user(id: $id) {
+                    id
+                    name
+                    email
+                }
+            }
+            """;
+
+        Map<String, Object> variables = Map.of("id", userId);
+        return graphql.query(query, variables, User.class).block();
+    }
+
+    // Batch operations
+    public Map<String, User> batchGetUsers(String... userIds) {
+        String query = """
+            query GetUsers($ids: [ID!]!) {
+                users(ids: $ids) {
+                    id
+                    name
+                    email
+                }
+            }
+            """;
+
+        Map<String, Object> variables = Map.of("ids", userIds);
+        return graphql.batchQuery(query, variables, "users", User.class).block();
+    }
+}
+```
+
+**Features**: Query caching, automatic retry, batch operations, Java Time API support, smart error handling.
+
+📖 **[Complete GraphQL Guide](docs/GRAPHQL_HELPER.md)**
+
+### OAuth2 Client Helper
+
+Production-ready OAuth2 client with multi-scope token caching and automatic refresh:
+
+```java
+import com.firefly.common.client.oauth2.OAuth2ClientHelper;
+import com.firefly.common.client.oauth2.OAuth2Config;
+
+@Service
+public class OAuth2Service {
+
+    private final OAuth2ClientHelper oauth2;
+
+    public OAuth2Service() {
+        OAuth2Config config = OAuth2Config.builder()
+            .timeout(Duration.ofSeconds(30))
+            .enableRetry(true)
+            .maxRetries(3)
+            .tokenExpirationBuffer(120) // Refresh 2 minutes before expiration
+            .build();
+
+        this.oauth2 = new OAuth2ClientHelper(
+            "https://auth.example.com/oauth/token",
+            "client-id",
+            "client-secret",
+            config
+        );
+    }
+
+    public String getAccessToken() {
+        return oauth2.getToken("read write").getAccessToken();
+    }
+
+    public String getIdToken() {
+        return oauth2.getToken("openid profile email").getIdToken();
+    }
+}
+```
+
+**Features**: Multi-scope token caching, automatic refresh, retry with exponential backoff, ID token support.
+
+📖 **[Complete OAuth2 Guide](docs/OAUTH2_HELPER.md)**
+
+### Multipart Upload Helper
+
+Enterprise file upload with progress tracking, chunked uploads, and parallel processing:
+
+```java
+import com.firefly.common.client.multipart.MultipartUploadHelper;
+import com.firefly.common.client.multipart.MultipartConfig;
+
+@Service
+public class FileUploadService {
+
+    private final MultipartUploadHelper upload;
+
+    public FileUploadService() {
+        MultipartConfig config = MultipartConfig.builder()
+            .timeout(Duration.ofMinutes(5))
+            .enableProgressTracking(true)
+            .enableCompression(true)
+            .chunkSize(5 * 1024 * 1024) // 5MB chunks
+            .maxFileSize(100 * 1024 * 1024) // 100MB max
+            .build();
+
+        this.upload = new MultipartUploadHelper(
+            "https://upload.example.com",
+            config
+        );
+    }
+
+    public UploadResponse uploadFile(File file) {
+        return upload.uploadFile("/upload", file, UploadResponse.class, progress -> {
+            System.out.println("Progress: " + progress.getPercentage() + "%");
+        }).block();
+    }
+
+    // Chunked upload for large files
+    public UploadResponse uploadLargeFile(File file) {
+        return upload.uploadFileChunked("/upload/chunked", file, UploadResponse.class,
+            progress -> log.info("Uploaded: {} MB", progress.getBytesUploaded() / 1024 / 1024)
+        ).block();
+    }
+
+    // Parallel upload
+    public List<UploadResponse> uploadMultipleFiles(List<File> files) {
+        return upload.uploadFilesParallel("/upload", files, UploadResponse.class,
+            progress -> log.info("Total progress: {}%", progress.getPercentage())
+        ).block();
+    }
+}
+```
+
+**Features**: Progress tracking, chunked uploads, parallel uploads, file validation, compression, cancellation.
+
+📖 **[Complete Multipart Upload Guide](docs/MULTIPART_HELPER.md)**
+
+### WebSocket Client Helper
+
+Production-ready WebSocket client with automatic reconnection and heartbeat:
+
+```java
+import com.firefly.common.client.websocket.WebSocketClientHelper;
+import com.firefly.common.client.websocket.WebSocketConfig;
+
+@Service
+public class WebSocketService {
+
+    private final WebSocketClientHelper ws;
+
+    public WebSocketService() {
+        WebSocketConfig config = WebSocketConfig.builder()
+            .enableReconnection(true)
+            .reconnectionDelay(Duration.ofSeconds(5))
+            .maxReconnectionAttempts(10)
+            .enableHeartbeat(true)
+            .heartbeatInterval(Duration.ofSeconds(30))
+            .enableMessageQueue(true)
+            .build();
+
+        this.ws = new WebSocketClientHelper(
+            "wss://api.example.com/ws",
+            config
+        );
+    }
+
+    public void connect() {
+        ws.connect(
+            message -> log.info("Received: {}", message),
+            error -> log.error("Error: {}", error.getMessage())
+        );
+    }
+
+    public void sendMessage(String message) {
+        ws.sendMessage(message);
+    }
+}
+```
+
+**Features**: Automatic reconnection, heartbeat/ping-pong, message queuing, binary messages, compression.
+
+📖 **[Complete WebSocket Guide](docs/WEBSOCKET_HELPER.md)**
+
+## 🔒 Security Features
+
+Enterprise-grade security features for production deployments.
+
+### Certificate Pinning
+
+Prevent MITM attacks with SHA-256 certificate pinning:
+
+```java
+import com.firefly.common.client.security.CertificatePinningManager;
+
+CertificatePinningManager pinning = CertificatePinningManager.builder()
+    .addPin("api.example.com", "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
+    .addPin("api.example.com", "sha256/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=") // Backup pin
+    .strictMode(true)
+    .build();
+
+SSLContext sslContext = pinning.createSslContext();
+```
+
+### API Key Management
+
+Secure API key management with rotation and expiration:
+
+```java
+import com.firefly.common.client.security.ApiKeyManager;
+
+// Static API key
+ApiKeyManager keyManager = ApiKeyManager.simple("service-name", "api-key-12345");
+
+// Dynamic API key with rotation
+ApiKeyManager keyManager = ApiKeyManager.builder()
+    .serviceName("user-service")
+    .apiKeySupplier(() -> vaultClient.getSecret("user-service-api-key"))
+    .rotationInterval(Duration.ofHours(1))
+    .autoRotate(true)
+    .build();
+
+String currentKey = keyManager.getCurrentApiKey();
+```
+
+### JWT Validation
+
+Validate JWT tokens with signature verification and claims validation:
+
+```java
+import com.firefly.common.client.security.JwtValidator;
+
+JwtValidator validator = JwtValidator.builder()
+    .secret("your-secret-key")
+    .issuer("https://auth.example.com")
+    .audience("api.example.com")
+    .validateExpiration(true)
+    .validateSignature(true)
+    .build();
+
+JwtClaims claims = validator.validate(jwtToken);
+String userId = claims.getSubject();
+```
+
+### Secrets Encryption
+
+AES-256-GCM encryption for sensitive data:
+
+```java
+import com.firefly.common.client.security.SecretsEncryptionManager;
+
+SecretsEncryptionManager encryption = SecretsEncryptionManager.builder()
+    .masterKey("your-32-byte-master-key-here!!")
+    .build();
+
+// Encrypt/decrypt
+String encrypted = encryption.encrypt("my-api-key-12345");
+String decrypted = encryption.decrypt(encrypted);
+
+// Store secrets
+encryption.storeSecret("payment-api-key", "sk_live_12345");
+String apiKey = encryption.getSecret("payment-api-key");
+```
+
+### Client-Side Rate Limiting
+
+Prevent overwhelming downstream services:
+
+```java
+import com.firefly.common.client.security.ClientSideRateLimiter;
+
+ClientSideRateLimiter rateLimiter = ClientSideRateLimiter.builder()
+    .serviceName("payment-service")
+    .maxRequestsPerSecond(10.0)
+    .maxConcurrentRequests(50)
+    .strategy(RateLimitStrategy.TOKEN_BUCKET)
+    .build();
+
+if (rateLimiter.tryAcquire()) {
+    try {
+        makeApiCall();
+    } finally {
+        rateLimiter.release();
+    }
+}
+```
+
+📖 **[Complete Security Guide](docs/SECURITY.md)**
+
+## 📊 Observability
+
+Comprehensive observability features for production monitoring.
+
+### Performance Metrics
+
+Track request performance with Micrometer integration:
+
+```java
+import com.firefly.common.client.metrics.PerformanceMetricsCollector;
+
+PerformanceMetricsCollector metrics = new PerformanceMetricsCollector(meterRegistry);
+
+// Record request
+metrics.recordRequest("user-service", "GET", "/api/users", duration, 200, responseSize);
+
+// Get statistics
+RequestStats stats = metrics.getRequestStats("user-service");
+log.info("Total requests: {}, Success rate: {}%",
+    stats.getTotalRequests(),
+    stats.getSuccessRate() * 100);
+```
+
+### Health Indicators
+
+Spring Boot Actuator integration for health monitoring:
+
+```java
+import com.firefly.common.client.health.ServiceClientHealthIndicator;
+
+// Automatically exposed via Spring Boot Actuator
+// Access at: /actuator/health/serviceClient
+
+@Component
+public class CustomHealthIndicator extends ServiceClientHealthIndicator {
+
+    public CustomHealthIndicator(List<ServiceClient> clients) {
+        super(clients);
+    }
+
+    @Override
+    protected void doHealthCheck(Health.Builder builder) {
+        // Custom health check logic
+        super.doHealthCheck(builder);
+        builder.withDetail("custom-metric", "value");
+    }
+}
+```
+
+### Request/Response Logging
+
+Advanced logging with sensitive data masking:
+
+```java
+import com.firefly.common.client.interceptor.RequestResponseLoggingInterceptor;
+
+RequestResponseLoggingInterceptor logging = RequestResponseLoggingInterceptor.builder()
+    .logLevel(LogLevel.FULL)
+    .maskSensitiveHeaders(true)
+    .sensitiveHeaders(List.of("Authorization", "X-API-Key"))
+    .maxBodySize(1024)
+    .build();
+```
+
+📖 **[Complete Observability Guide](docs/OBSERVABILITY.md)**
+
 ## ⚙️ Configuration
 
 ### Application Properties
@@ -785,11 +1192,31 @@ The library follows a layered architecture designed for scalability and maintain
 
 Comprehensive documentation is available in the `/docs` directory:
 
-- **[📖 Overview](docs/OVERVIEW.md)** - Comprehensive overview of all components
-- **[🚀 Quick Start Guide](docs/QUICKSTART.md)** - Get started quickly with examples
-- **[🏗️ Architecture Guide](docs/ARCHITECTURE.md)** - Detailed architecture documentation
+### Getting Started
+- **[📖 Documentation Home](docs/README.md)** - Start here for complete documentation
+- **[🚀 Quick Start Guide](docs/QUICK_START.md)** - Get started in 5 minutes
+- **[🔄 Migration Guide](docs/MIGRATION_GUIDE.md)** - Upgrade from older versions
+
+### Client Guides
+- **[🔴 REST Client Guide](docs/REST_CLIENT.md)** - Complete guide for HTTP/REST services
+- **[🟢 gRPC Client Guide](docs/GRPC_CLIENT.md)** - Complete guide for gRPC services
+- **[🔵 SOAP Client Guide](docs/SOAP_CLIENT.md)** - Complete guide for SOAP/WSDL services
+
+### Helper Guides
+- **[🔷 GraphQL Helper](docs/GRAPHQL_HELPER.md)** - GraphQL client with caching and retry
+- **[🔑 OAuth2 Helper](docs/OAUTH2_HELPER.md)** - OAuth2 token management
+- **[📤 Multipart Upload Helper](docs/MULTIPART_HELPER.md)** - File upload with progress tracking
+- **[🔌 WebSocket Helper](docs/WEBSOCKET_HELPER.md)** - WebSocket client with reconnection
+
+### Advanced Topics
 - **[⚙️ Configuration Reference](docs/CONFIGURATION.md)** - Complete configuration options
-- **[🧪 Testing Guide](docs/TESTING.md)** - Testing strategies and utilities
+- **[🔒 Security Guide](docs/SECURITY.md)** - Certificate pinning, mTLS, JWT, encryption
+- **[📊 Observability Guide](docs/OBSERVABILITY.md)** - Metrics, tracing, health checks
+- **[🧪 Integration Testing](docs/INTEGRATION_TESTING.md)** - WireMock and test containers
+- **[⭐ Advanced Features](docs/ADVANCED_FEATURES.md)** - Chaos engineering, caching, service discovery, plugins **NEW**
+
+### Examples
+- **[💡 Complete Example](examples/complete-example/)** - Full working example with all features
 
 ## 🧪 Testing
 
