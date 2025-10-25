@@ -419,6 +419,32 @@ public class RestServiceClientImpl implements RestClient {
 
                 // Success response - deserialize
                 if (responseType != null) {
+                    // Special handling for DynamicJsonResponse
+                    if (responseType.getName().equals("com.firefly.common.client.dynamic.DynamicJsonResponse")) {
+                        return response.bodyToMono(String.class)
+                            .map(json -> {
+                                try {
+                                    // Use reflection to call DynamicJsonResponse.fromJson(String)
+                                    Class<?> dynamicClass = Class.forName("com.firefly.common.client.dynamic.DynamicJsonResponse");
+                                    java.lang.reflect.Method fromJsonMethod = dynamicClass.getMethod("fromJson", String.class);
+                                    return (R) fromJsonMethod.invoke(null, json);
+                                } catch (Exception e) {
+                                    ErrorContext context = ErrorContext.builder()
+                                        .serviceName(serviceName)
+                                        .endpoint(endpoint)
+                                        .method(method)
+                                        .clientType(ClientType.REST)
+                                        .requestId(requestId)
+                                        .elapsedTime(Duration.between(startTime, Instant.now()))
+                                        .build();
+                                    throw new ServiceSerializationException(
+                                        "Failed to create DynamicJsonResponse: " + e.getMessage(),
+                                        json,
+                                        context,
+                                        e);
+                                }
+                            });
+                    }
                     return response.bodyToMono(responseType);
                 } else if (typeReference != null) {
                     // For TypeReference, use shared ObjectMapper instance
